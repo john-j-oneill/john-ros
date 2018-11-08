@@ -1,0 +1,14 @@
+<launch>
+
+  <param name="robot_description" command="$(find xacro)/xacro.py --inorder $(find kuka_lbr_iiwa_support)/urdf/lbr_iiwa_14_r820.xacro" />
+  <param name="use_gui" value="true"/>
+
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find corvus_description)/rviz/corvus.rviz" />
+  
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" />
+
+  <!--node pkg="tf" type="static_transform_publisher" name="model_frame" args=" 0 0 0.011 0 0 1.57079632679 ctr_base base_link 10" /-->
+
+
+</launch>

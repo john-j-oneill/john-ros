@@ -1,0 +1,43 @@
+<launch>
+
+  <!-- these are the arguments you can pass this launch file, for example paused:=true -->
+  
+  
+  <arg name="scaling_factor" default="1.0"/>
+  <arg name="offset_x" default="0.000"/><!-- Move to left -->
+  <arg name="offset_y" default="0.000"/>
+  <arg name="offset_z" default="0.000"/><!-- Move down into floor -->
+  
+  <node pkg="corvus_ik" type="corvus_ik_node" name="corvus_ik_node_gold" output="screen" >
+    <param name="verbose" value="false"/>
+    <param name="robot_name" value="gold"/>
+    <param name="target_link" value="vrviz_base_controller_1"/>
+    <param name="base_link" value="gold_link_0"/>
+    <param name="num_divs" value="200"/>
+    <remap from="joint_targets" to="/joint_states"/>
+  </node>
+  <node pkg="corvus_ik" type="corvus_ik_node" name="corvus_ik_node_green" output="screen" >
+    <param name="verbose" value="false"/>
+    <param name="robot_name" value="green"/>
+    <param name="target_link" value="vrviz_base_controller_2"/>
+    <param name="base_link" value="green_link_0"/>
+    <param name="num_divs" value="200"/>
+    <remap from="joint_targets" to="/joint_states"/>
+  </node>
+  
+  <include file="$(find vrviz)/launch/vrviz.launch">
+  <arg name="scaling_factor" value="$(arg scaling_factor)"/>
+  <arg name="load_robot" value="true"/>
+  </include>
+  <node pkg="tf" type="static_transform_publisher" name="coordinate_vive" args="$(arg offset_x) $(arg offset_y) $(arg offset_z) 0 0 1.57079632679 corvus_base vrviz_base 10" />
+
+  <param name="robot_description" command="$(find xacro)/xacro.py --inorder $(find corvus_description)/urdf/corvus.urdf.xacro" />
+  <!--param name="use_gui" value="true"/>
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" /-->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" />
+
+  <!--node pkg="tf" type="static_transform_publisher" name="model_frame" args=" 0 0 0.011 0 0 1.57079632679 ctr_base base_link 10" /-->
+
+
+</launch>

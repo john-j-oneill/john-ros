@@ -1,0 +1,54 @@
+<launch>
+    <arg name="record" default="false" />
+    <!-- Note that this is looking for ctr_data to be checked out in the same directory as ctr_ros -->
+    <arg name="bagdir" default="$(find ctr_shape_display)/../../../ctr_data/bagfiles/" />
+    <arg name="bagname" default="kinect1_2018-07-24-17-38-57.bag" />
+	<arg name="kinect_name" default="kinect1" />
+	
+	
+    <!-- If we are recording, save the bagfile -->
+    <group if="$(arg record)">
+        <param name="/use_sim_time" value="false" />
+        <node pkg="rosbag" type="record" name="rosbag_record"
+            args=" -o $(arg bagdir)/$(arg kinect_name) $(arg kinect_name)/depth/image_raw $(arg kinect_name)/depth/camera_info $(arg kinect_name)/rgb/image_raw $(arg kinect_name)/rgb/camera_info"
+        />
+    </group>
+    <!-- If we are playing back, rosbag play the bagfile -->
+    <group unless="$(arg record)">
+        <param name="/use_sim_time" value="true" />
+        <node pkg="rosbag" type="play" name="rosbag_play"
+              args=" $(arg bagdir)/$(arg bagname) --clock -r 0.4 "
+        />
+    </group>
+    
+    <node pkg="kinfu" type="kinfu" name="kinect_kinfu1" output="screen">
+        <param name="prefix_topic" value="/$(arg kinect_name)" />
+        <param name="depth_image_topic" value="/$(arg kinect_name)/depth_registered/sw_registered/image_rect_raw" />
+        <param name="camera_info_topic" value="/$(arg kinect_name)/depth_registered/sw_registered/camera_info" />
+        <param name="autostart" value="true" />
+        <param name="response_topic" value="/kinfu1_response_topic" />
+        <param name="request_topic" value="/kinfu1_request_topic" />
+        <param name="extract_known_points" value="true" />
+        <param name="extract_incomplete_border_points" value="false" />
+        <param name="extract_incomplete_frontier_points" value="false" />
+        <param name="extract_surface_points" value="false" />
+        <param name="extract_textures" value="true" />
+        <param name="snapshot_rate" value="30" />
+        <param name="file_prefix" value="/tmp/$(arg kinect_name)/" />
+        <param name="volume_size" value="3.0" />
+        <param name="shift_distance" value="1.5" />
+        <param name="volume_resolution" value="768" />
+        <param name="queue_size" value="2" />
+    </node>
+  
+    <include file="$(find openni_launch)/launch/openni.launch" >
+        <arg name="camera" value="$(arg kinect_name)" />
+        <arg name="load_driver" value="$(arg record)" />
+    </include>
+    <!--node pkg="rviz" type="rviz" name="rviz"
+    args="-d $(find kinect)/rviz/kinect.rviz" /-->
+    <node pkg="image_view" type="image_view" name="image_view">
+        <remap from="image" to="kinfu_current_view" />
+    </node>
+	
+</launch>
