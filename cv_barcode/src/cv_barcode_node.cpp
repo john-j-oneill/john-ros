@@ -36,7 +36,6 @@ cv::Mat frame, cropped, img, imgout;
 /// ROS Node Variables
 ros::NodeHandle *nh;
 ros::Publisher pub_point_out;
-ros::Publisher pub_points_out;
 ros::Publisher pub_img_out;
 
 /// Change this to display a pretty picture
@@ -46,10 +45,13 @@ bool publish_both_sides=false;
 bool qr_text_in_frameid=false;
 float Fx=554.254691191187;
 float qr_real_width=0.168;//!< m
+bool debug = false;/// Print debug info to std::cout
 
 void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
 {
     tic();
+
+    /// Convert from a ROS message to an OpenCV Mat
     cv_bridge::CvImagePtr cv_ptr_rgb;
     try
     {
@@ -61,46 +63,29 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
         return;
     }
 
-//    if(cv_ptr_rgb->image.cols>1920)
-//    {
-//        int xMin=0;
-//        int xMax=cv_ptr_rgb->image.cols;
-//        int yMin=cv_ptr_rgb->image.rows/4;
-//        int yMax=cv_ptr_rgb->image.rows/4*3;
-//        cv_ptr_rgb->image(cv::Rect(xMin,yMin,xMax-xMin,yMax-yMin)).copyTo(cropped);
-//        cv::resize(cropped, frame, cv::Size(), 0.5, 0.5, cv::INTER_AREA);
-//    }else{
-//        int xMin=0;
-//        int xMax=cv_ptr_rgb->image.cols;
-//        int yMin=cv_ptr_rgb->image.rows/4;
-//        int yMax=cv_ptr_rgb->image.rows/4*2.2;
-//        cv_ptr_rgb->image(cv::Rect(xMin,yMin,xMax-xMin,yMax-yMin)).copyTo(frame);
-//        //frame = cv_ptr_rgb->image.clone();
-//    }
-    
-    
+    /// Convert to gray since QR codes are black and white
     cv::cvtColor(cv_ptr_rgb->image,img,CV_BGR2GRAY);
+    /// If we are displaying or publishing the image for debug purposes, make a copy to draw onto
     if(display_image || publish_image){
         cv::cvtColor(img,imgout,CV_GRAY2RGB);  
     }
 
+    /// Copy the image data pointer to ZBar
     int width = img.cols;  
     int height = img.rows;  
     uchar *raw = (uchar *)img.data;  
     // wrap image data  
     zbar::Image image(width, height, "Y800", raw, width * height);  
     // scan the image for barcodes  
-    int n = scanner.scan(image);  
-    // extract results  
-    nav_msgs::Path msg;
-    msg.header.frame_id="base_link";
-    msg.header.stamp=image_msg->header.stamp;
-    int symbols=0;
+    int n = scanner.scan(image);
+    int symbols = 0;
     for(zbar::Image::SymbolIterator symbol = image.symbol_begin();  symbol != image.symbol_end();  ++symbol) {
         symbols++;
+
         /// Display the QR Code's text
-        //std::cout << symbol->get_data();
-        
+        if(debug)
+            std::cout << symbol->get_data();
+
         /// Find the average x,y and line length.
         /// Average x and y represent the middle of the QR Code (mostly)
         /// Average line length gives us a way to estimate distance, since
@@ -120,16 +105,20 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
             avg_x_px+=symbol->get_location_x(i);
             avg_y_px+=symbol->get_location_y(i);
             
-            //std::cout << "\t" << dist;
-            //std::cout << "\t" << symbol->get_location_x(i);
-            //std::cout << "\t" << symbol->get_location_y(i);
+            if(debug){
+                std::cout << "\t" << dist_px;
+                std::cout << "\t" << symbol->get_location_x(i);
+                std::cout << "\t" << symbol->get_location_y(i);
+            }
         }
         avg_dist_px/=size;
         avg_x_px/=size;
         avg_y_px/=size;
-        //std::cout << "\t" << avg_dist_px;
-        //std::cout << "\t" << avg_x_px;
-        //std::cout << "\t" << avg_y_px;
+        if(debug){
+            std::cout << "\t" << avg_dist_px;
+            std::cout << "\t" << avg_x_px;
+            std::cout << "\t" << avg_y_px;
+        }
         
         float left_dist_px;
         float right_dist_px;
@@ -182,71 +171,23 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
         
         
         float c   = qr_real_width;
-        float r   = tan(right_dist_px*rad_per_px/2.0)/
-                    tan(left_dist_px *rad_per_px/2.0);
+        float r   = std::tan(right_dist_px*rad_per_px/2.0)/
+                    std::tan(left_dist_px *rad_per_px/2.0);
         float C   = (right_bear_px-left_bear_px)*rad_per_px;
-        float a   = sqrt(c*c/(1 + 1.0/r/r - 2/r*cos(C)));
-        float b   = sqrt(c*c/(1 + r*r     - 2*r*cos(C)));
+        float a   = std::sqrt(c*c/(1 + 1.0/r/r - 2/r*std::cos(C)));
+        float b   = std::sqrt(c*c/(1 + r*r     - 2*r*std::cos(C)));
 
         float bearing_r=(right_bear_px-width/2.0)*rad_per_px;
         float beta= M_PI_2 - bearing_r;
-        float A   = asin(a*sin(C)/c);
+        float A   = std::asin(a*sin(C)/c);
         float yaw = A - beta;
 
-        if(publish_both_sides)
-        {
-            {
-                /// Use some trig to calculate distance
-                float distance=a;//!< m
-                float bearing=(left_bear_px-width/2.0)*rad_per_px;
-                //std::cout << "\t" << distance;
-                //std::cout << std::endl;
-                
-                geometry_msgs::PoseStamped pose;
-                pose.header.frame_id=symbol->get_data()+"L";
-                pose.header.stamp=ros::Time::now();
-                pose.pose.position.x=cos(bearing)*distance;
-                pose.pose.position.y=sin(bearing)*distance;
-                pose.pose.position.z=0;
-                msg.poses.push_back(pose);
-            }
-            {
-                /// Use some trig to calculate distance
-                float distance=b;//!< m
-                float bearing=(right_bear_px-width/2.0)*rad_per_px;
-                //std::cout << "\t" << distance;
-                //std::cout << std::endl;
-                
-                geometry_msgs::PoseStamped pose;
-                pose.header.frame_id=symbol->get_data()+"R";
-                pose.header.stamp=ros::Time::now();
-                pose.pose.position.x=cos(bearing)*distance;
-                pose.pose.position.y=sin(bearing)*distance;
-                pose.pose.position.z=0;
-                msg.poses.push_back(pose);
-            }
-        }else{
-            /// Use some trig to calculate distance
-            float distance=qr_real_width/tan(avg_dist_px*rad_per_px/2.0);//!< m
-            float bearing=(avg_x_px-width/2.0)*rad_per_px;
-            //std::cout << "\t" << distance;
-            //std::cout << std::endl;
-            
-            geometry_msgs::PoseStamped pose;
-            pose.header.frame_id=symbol->get_data();
-            //msg.header.frame_id="base_link";
-            pose.header.stamp=ros::Time::now();
-            pose.pose.position.x=cos(bearing)*distance;
-            pose.pose.position.y=sin(bearing)*distance;
-            pose.pose.position.z=0;
-            msg.poses.push_back(pose);
-        }
-
         /// Use some trig to calculate distance
-        float distance=qr_real_width/tan(avg_dist_px*rad_per_px/2.0)/2.0;//!< m
+        float distance=qr_real_width/std::tan(avg_dist_px*rad_per_px/2.0)/2.0;//!< m
         float bearing_x=(avg_x_px-width/2.0)*rad_per_px;
         float bearing_y=(avg_y_px-height/2.0)*rad_per_px;
 
+        /// Publish the x,y,z and yaw of the QR code in the optical frame
         geometry_msgs::PoseStamped msg;
         if(qr_text_in_frameid)
         {
@@ -256,9 +197,9 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
             msg.header.frame_id="base_link";
         }
         msg.header.stamp=ros::Time::now();
-        msg.pose.position.x=cos(bearing_y)*sin(bearing_x)*distance;
-        msg.pose.position.y=sin(bearing_y)*distance;
-        msg.pose.position.z=cos(bearing_y)*cos(bearing_x)*distance;
+        msg.pose.position.x=std::cos(bearing_y)*std::sin(bearing_x)*distance;
+        msg.pose.position.y=std::sin(bearing_y)*distance;
+        msg.pose.position.z=std::cos(bearing_y)*std::cos(bearing_x)*distance;
         /// \note this is only using the yaw, since that's all I care about, but the same could be done for pitch and roll if you care about that.
         msg.pose.orientation.x=0.0;
         msg.pose.orientation.y=std::sin(yaw/2.f); /// Dunno +/-, but should be rotating about y
@@ -285,11 +226,12 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
     }  
     
     if(display_image){
+        /// For debugging
         cv::imshow("barcodes", imgout);
-        cv::waitKey(30);
+        cv::waitKey(3);
     }
     if(publish_image){
-        
+        /// This way you can log it with rosbag or view it in rviz or on another computer over the network if you want.
         cv_bridge::CvImage out_msg;
         out_msg.header   = image_msg->header; // Same timestamp and tf frame as input image
         out_msg.encoding = image_msg->encoding; // Or whatever
@@ -297,8 +239,9 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
 
         pub_img_out.publish(out_msg.toImageMsg());
     }
-    //std::cout << "Found " << symbols << " symbols in " << toc() << " seconds" << std::endl;
-    pub_points_out.publish(msg);
+    if(debug)
+        std::cout << "Found " << symbols << " symbols in " << toc() << " seconds" << std::endl;
+
     // clean up  
     image.set_data(NULL, 0);
 }
@@ -319,10 +262,10 @@ main (int argc, char** argv)
     nh->getParam("publish_both_sides",publish_both_sides);
     nh->getParam("qr_text_in_frameid",qr_text_in_frameid);
     nh->getParam("Fx",Fx);
+    nh->getParam("debug",debug);
 
     // advertise
     pub_point_out = nh->advertise<geometry_msgs::PoseStamped>("/landmark", 1);
-    pub_points_out = nh->advertise<nav_msgs::Path>("/landmarks", 1);
     pub_img_out = nh->advertise<sensor_msgs::Image>("/rgb/image_barcode", 1);
 
     // subscribe
