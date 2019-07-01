@@ -38,11 +38,14 @@ ros::NodeHandle *nh;
 ros::Publisher pub_point_out;
 ros::Publisher pub_points_out;
 ros::Publisher pub_img_out;
-int seq=0;
 
 /// Change this to display a pretty picture
 bool display_image=true;
 bool publish_image=false;
+bool publish_both_sides=false;
+bool qr_text_in_frameid=false;
+float Fx=554.254691191187;
+float qr_real_width=0.168;//!< m
 
 void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
 {
@@ -92,7 +95,6 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
     nav_msgs::Path msg;
     msg.header.frame_id="base_link";
     msg.header.stamp=image_msg->header.stamp;
-    msg.header.seq=seq++;
     int symbols=0;
     for(zbar::Image::SymbolIterator symbol = image.symbol_begin();  symbol != image.symbol_end();  ++symbol) {
         symbols++;
@@ -154,11 +156,9 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
         /// THIS IS DEFINITELY WRONG!!!!  ESPECIALLY NEAR THE EDGES!!!
         //float fov=39.0;//!< Degrees
         //float fov=60.0;//!< Degrees
-        float Fx=554.254691191187;
         float fov_rad=2 * atan(0.5 * width / Fx);
         //float fov_rad=fov*M_PI/180.0;
         float rad_per_px=fov_rad/width;
-        float qr_real_width=0.168;//!< m
         
         /// Law of cosines:
         /// c^2 = a^2 + b^2 - 2ab*cos(C)
@@ -192,8 +192,7 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
         float beta= M_PI_2 - bearing_r;
         float A   = asin(a*sin(C)/c);
         float yaw = A - beta;
-        
-        bool publish_both_sides=false;
+
         if(publish_both_sides)
         {
             {
@@ -248,17 +247,23 @@ void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
         float bearing_x=(avg_x_px-width/2.0)*rad_per_px;
         float bearing_y=(avg_y_px-height/2.0)*rad_per_px;
 
-        geometry_msgs::TransformStamped msg;
-        msg.header.frame_id=symbol->get_data();
-        //msg.header.frame_id="base_link";
+        geometry_msgs::PoseStamped msg;
+        if(qr_text_in_frameid)
+        {
+            /// This is totally incorrect and will break RViz. But it could be useful for parsing position and text with one message.
+            msg.header.frame_id=symbol->get_data();
+        }else{
+            msg.header.frame_id="base_link";
+        }
         msg.header.stamp=ros::Time::now();
-        msg.header.seq=seq++;
-        msg.transform.translation.x=sin(bearing_x)*distance;
-        msg.transform.translation.y=sin(bearing_y)*distance;
-        msg.transform.translation.z=distance;
-        msg.transform.rotation.x=0.0; /// Dunno
-        msg.transform.rotation.y=yaw; /// This is what we call yaw, maybe? About the robot's Z?
-        msg.transform.rotation.z=0.0; /// Dunno
+        msg.pose.position.x=cos(bearing_y)*sin(bearing_x)*distance;
+        msg.pose.position.y=sin(bearing_y)*distance;
+        msg.pose.position.z=cos(bearing_y)*cos(bearing_x)*distance;
+        /// \note this is only using the yaw, since that's all I care about, but the same could be done for pitch and roll if you care about that.
+        msg.pose.orientation.x=0.0;
+        msg.pose.orientation.y=std::sin(yaw/2.f); /// Dunno +/-, but should be rotating about y
+        msg.pose.orientation.z=0.0;
+        msg.pose.orientation.w=std::cos(yaw/2.f);
         pub_point_out.publish(msg);
         
         if(display_image || publish_image){
@@ -309,9 +314,14 @@ main (int argc, char** argv)
     /// Initialize ROS
     ros::init (argc, argv, "cv_barcode_node");
     nh = new ros::NodeHandle("~");
+    nh->getParam("publish_image",publish_image);
+    nh->getParam("display_image",display_image);
+    nh->getParam("publish_both_sides",publish_both_sides);
+    nh->getParam("qr_text_in_frameid",qr_text_in_frameid);
+    nh->getParam("Fx",Fx);
 
     // advertise
-    pub_point_out = nh->advertise<geometry_msgs::TransformStamped>("/landmark", 1);
+    pub_point_out = nh->advertise<geometry_msgs::PoseStamped>("/landmark", 1);
     pub_points_out = nh->advertise<nav_msgs::Path>("/landmarks", 1);
     pub_img_out = nh->advertise<sensor_msgs::Image>("/rgb/image_barcode", 1);
 

@@ -1,0 +1,25 @@
+<launch>
+  <!--  webcam -->
+  <node name="Jubilee" pkg="usb_cam" type="usb_cam_node">
+    <param name="video_device" value="/dev/video0" />
+    <remap from="/Jubilee/image_raw" to="/rgb/image_rect" />
+  </node>
+
+  <node pkg="cv_barcode" type="cv_barcode_node" name="Victoria">
+    <remap from="/rgb/image_rect" to="/rgb/image_rect" />
+    <param name="publish_image" value="true" />
+    <param name="display_image" value="true" />
+    <param name="publish_both_sides" value="false" />
+    <param name="qr_text_in_frameid" value="false" />
+    <param name="Fx" value="554.254691191187" />
+    <param name="qr_real_width" value="0.050" />
+  </node>
+
+  <node pkg="image_view" type="image_view" name="Picadilly">
+    <remap from="image" to="/rgb/image_barcode" />
+  </node>
+
+  <arg name="rvizconfig" default="$(find cv_barcode)/rviz/cv_barcode.rviz" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
+
+</launch>
