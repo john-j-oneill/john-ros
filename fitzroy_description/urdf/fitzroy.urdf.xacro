@@ -73,6 +73,7 @@
 
   <!-- Sensor Locations -->
   <xacro:property name="gps_y" value="-0.02"/>
+  <xacro:property name="ranger_size" value="0.01"/>
 
 
 
@@ -141,42 +142,12 @@
 
 	<!-- base footprint to make everything work better -->
   <link name="base_footprint">
-    <visual>
-      <geometry>
-        <box size="0.001 0.001 0.001"/>
-      </geometry>
-			<origin rpy="0 0 0" xyz="0 0 0"/>
-			<material name="white"/>
-    </visual>
-		<inertial>
-			<mass value="0.0001"/>
-			<origin xyz="0 0 0"/>
-			<inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
-		</inertial>
   </link>
-	<gazebo reference="base_footprint">
-		<material>Gazebo/White</material>
-	</gazebo>
 
 
 	<!-- base link for whole car ${wheelbase/2} -->
   <link name="base_link">
-    <visual>
-      <geometry>
-        <box size="0.001 0.001 0.001"/>
-      </geometry>
-			<material name="white"/>
-    </visual>
-		<collision>
-			<geometry>
-				<box size="0.001 0.001 0.001"/>
-			</geometry>
-		</collision>
-		<xacro:default_inertial mass="1"/>
   </link>
-	<gazebo reference="base_link">
-		<material>Gazebo/White</material>
-	</gazebo>
 	<joint name="base_footprint_to_base_link" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
@@ -205,7 +176,7 @@
 	<joint name="base_link_to_chasis" type="fixed">
     <parent link="base_link"/>
     <child link="chassis"/>
-    <origin xyz="0 0 ${chasisheight/2 + rear_shock_offset} "/>
+    <origin xyz="0 0 ${rear_shock_offset} "/>
   </joint>
 
 	<!-- rear axle -->
@@ -548,7 +519,7 @@
     </visual>
 		<collision>
 			<geometry>
-				<box size="${framewidth} ${frameheight} ${thickness}"/>
+        <box size="${frameheight} ${framewidth} ${thickness}"/>
 			</geometry>
 			<!-- <origin rpy="0 ${pi/2} 0" xyz="0 0 ${-chasisheight/2} "/> -->
 			<origin rpy="0 ${pi/2} 0" xyz="${frame_x} 0 ${chasisheight-frame_z} "/>
