@@ -1,0 +1,89 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="picam">
+  <xacro:property name="M_PI" value="3.1415926535897931" />
+  <xacro:property name="picam_width" value="0.025" />
+  <xacro:property name="picam_height" value="0.024" />
+  <xacro:property name="picam_thickness" value="0.009" />
+  <xacro:property name="picam_hfov" value="${53.50*M_PI/180}" />
+
+	<!-- Simple Raspberry Pi Camera -->
+  <xacro:macro name="picam" params="*origin parent:=base_link name:=camera ">
+
+	<joint name="${name}_joint" type="fixed">
+    <xacro:insert_block name="origin" /> 
+    <axis xyz="0 1 0" />
+    <parent link="${parent}"/>
+    <child link="${name}_link"/>
+  </joint>
+	<link name="${name}_link">
+    <collision>
+      <geometry>
+    		<box size="${picam_thickness} ${picam_width} ${picam_height} "/>
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <mesh filename="package://fitzroy_description/meshes/picam.dae" scale="0.0254 0.0254 0.0254"/>
+      </geometry>
+      <!-- These offsets are specific to the dae file, and were found experimentally ${-1.128+0.01025} ${-0.874-0.00126} -0.003 -->
+      <origin xyz="-0.003 1.11775 0.87526" rpy="${-M_PI/2} 0 ${-M_PI/2}"/>
+    </visual>
+    <inertial>
+      <mass value="1e-5" />
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+    </inertial>
+  </link>
+  <joint name="${name}_optical_joint" type="fixed">
+    <!-- these values have to be these values otherwise the gazebo camera
+        image won't be aligned properly with the frame it is supposedly
+        originating from -->
+    <origin xyz="0 0 0" rpy="${-M_PI/2} 0 ${-M_PI/2}"/>
+    <parent link="${name}_link"/>
+    <child link="${name}_link_optical"/>
+  </joint>
+
+  <link name="${name}_link_optical">
+  </link>
+  <gazebo reference="${name}_link">
+    <sensor type="camera" name="${name}">
+      <update_rate>30.0</update_rate>
+      <camera name="head">
+        <horizontal_fov>${picam_hfov}</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.02</near>
+          <far>1000</far>
+        </clip>
+        <noise>
+          <type>gaussian</type>
+          <!-- Noise is sampled independently per pixel on each frame.
+               That pixel's noise value is added to each of its color
+               channels, which at that point lie in the range [0,1]. -->
+          <mean>0.0</mean>
+          <stddev>0.007</stddev>
+        </noise>
+      </camera>
+      <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+        <alwaysOn>true</alwaysOn>
+        <updateRate>0.0</updateRate>
+        <cameraName>${name}</cameraName>
+        <imageTopicName>image_raw</imageTopicName>
+        <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+        <frameName>${name}_link_optical</frameName>
+        <hackBaseline>0.07</hackBaseline>
+        <distortionK1>0.0</distortionK1>
+        <distortionK2>0.0</distortionK2>
+        <distortionK3>0.0</distortionK3>
+        <distortionT1>0.0</distortionT1>
+        <distortionT2>0.0</distortionT2>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  </xacro:macro>
+</robot>

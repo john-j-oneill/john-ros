@@ -1,0 +1,855 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fitzroy">
+	<!-- roslaunch urdf_tutorial xacrodisplay.launch model:='$(find fitzroy_description)/urdf/tractorcustom.urdf.xacro' gui:='true'-->
+
+	<!-- Each link is a physical element, the visual tag is required -->
+	<!-- Each link also has a collision and inertial element which define interactions -->
+	<xacro:property name="pi" value="3.14159265358" />
+
+  <!-- The fake GPS needs an origin, it's an arg so it can be changed based on the world used. -->
+  <!-- This is the origin of the gazebo world, NOT the place the robot is first dropped into. -->
+  <xacro:arg name="latitude" default="0.0" />
+  <xacro:arg name="longitude" default="0.0" />
+
+  <xacro:arg name="use_velodyne" default="false" />
+
+
+	<!-- Front Loader Properties-->
+	<xacro:property name="framewidth" value="0.07" />
+	<xacro:property name="frameheight" value="0.1" />
+	<xacro:property name="thickness" value="0.01" />
+	<xacro:property name="armsize" value="0.01" />
+	<xacro:property name="armlen" value="0.10" />
+	<xacro:property name="forkwidth" value="0.02" />
+	<xacro:property name="forkheight" value="0.005" />
+	<xacro:property name="forklen" value="0.1" />
+	<xacro:property name="forksep" value="0.05" />
+	<xacro:property name="basedepth" value="0.04" />
+	<xacro:property name="liftmin" value="-0.5" />
+	<xacro:property name="liftmax" value="0.5" />
+	<xacro:property name="arm_x" value="0.028" />
+	<xacro:property name="arm_z" value="-0.010" />
+	<xacro:property name="frame_x" value="0.010" />
+	<xacro:property name="frame_z" value="0.010" />
+
+	<!-- chasis properties -->
+	<xacro:property name="chasiswidth" value="0.080" />
+	<xacro:property name="chasisheight" value="0.025" />
+	<xacro:property name="chasislength" value="0.202" />
+	<xacro:property name="chasismass" value="0.25"/>
+	<!-- Backrack on tractor that Reed made-->
+	<xacro:property name="rackheight" value="0.19" />
+	<xacro:property name="rackback" value="-0.015" />
+
+	<!-- Wheel properties-->
+	<xacro:property name="rearwheeldia" value="0.064" />
+	<xacro:property name="rearwheelwidth" value="0.025" />
+	<xacro:property name="frontwheeldia" value="0.064" />
+	<xacro:property name="frontwheelwidth" value="0.025" />
+	<xacro:property name="wheelmass" value=".050"/>
+	<xacro:property name="rearwheelsep" value="0.117"/>
+	<xacro:property name="frontwheelsep" value="0.117"/>
+	<xacro:property name="wheelbase" value="0.137"/>
+	<xacro:property name="axlesize" value="0.007"/>
+	<xacro:property name="turnmin" value="${-pi/4}" />
+	<xacro:property name="turnmax" value="${pi/4}" />
+
+
+	<!-- Wheel Friction -->
+	<xacro:property name="wheelfriction1" value="2.0"/>
+	<xacro:property name="wheelfriction2" value="2.0"/>
+	<xacro:property name="wheelcontactstiffness" value="1000000.0"/>
+	<xacro:property name="wheelcontactdamping" value="1.0"/>
+
+	<!-- Wheel offsets-->
+	<xacro:property name="front_shock_offset" value="0"/>
+  <xacro:property name="rear_shock_offset" value="0"/>
+
+	<!-- Motor properties (steer) -->
+	<xacro:property name="steer_eff_limit" value="10000.0"/>
+  <xacro:property name="steer_vel_limit" value="10.0"/>
+	<xacro:property name="propel_eff_limit" value="100000.0"/>
+  <xacro:property name="propel_vel_limit" value="50.0"/>
+
+  <!-- Sensor Locations -->
+  <xacro:property name="gps_y" value="-0.02"/>
+
+
+
+	<!-- default initializer for inertia -->
+	<xacro:macro name="default_inertial" params="mass">
+		<inertial>
+      			<mass value="${mass}" />
+		        <inertia ixx="1.0" ixy="0.0" ixz="0.0"
+			         iyy="1.0" iyz="0.0"
+			         izz="1.0" />
+		</inertial>
+	</xacro:macro>
+
+	<!-- macro for computing the inertia tensor for cubes-->
+	<!-- https://en.wikipedia.org/wiki/List_of_moments_of_inertia -->
+	<xacro:macro name="cube_inertial"
+               params="dimx dimy dimz mass">
+    <inertial>
+      <mass value="${mass}"/>
+      <inertia ixx="${(1/12)*mass*(dimy*dimy + dimz*dimz)}"
+               ixy="0" ixz="0"
+               iyy="${(1/12)*mass*(dimx*dimx + dimz*dimz)}"
+               iyz="0"
+               izz="${(1/12)*mass*(dimx*dimx + dimy*dimy)}"/>
+    </inertial>
+  </xacro:macro>
+
+	<!-- macro for computing inertia tensor for a cylinder-->
+	<!-- http://scienceworld.wolfram.com/physics/MomentofInertiaCylinder.html -->
+	<xacro:macro name="cylinder_inertial"
+               params="rad height mass">
+    <inertial>
+      <mass value="${mass}"/>
+      <inertia ixx="${(1/12)*mass*(height*height) + (1 / 4)*mass*(rad*rad) }"
+               ixy="0" ixz="0"
+               iyy="${(1/12)*mass*(height*height) + (1 / 4)*mass*(rad*rad) }"
+               iyz="0"
+               izz="${(1/2)* mass * (rad*rad)}"/>
+    </inertial>
+  </xacro:macro>
+
+
+	<!-- Setup some colors -->
+	<!-- List of materials: http://wiki.ros.org/simulator_gazebo/Tutorials/ListOfMaterials-->
+	<material name="blue">
+		<color rgba="0 0 0.8 1"/>
+	</material>
+	<material name="red">
+		<color rgba="0.8 0 0 1"/>
+	</material>
+	<material name="hideaxle">
+		<color rgba="1 1 1 1"/>
+	</material>
+	<material name="white">
+		<color rgba="1 1 1 1"/>
+	</material>
+	<material name="black">
+		<color rgba="0 0 0 1"/>
+	</material>
+	<material name="grey">
+		<color rgba="0.3 0.3 0.3 1"/>
+	</material>
+	<material name="green">
+		<color rgba="0 0.6 0 1"/>
+	</material>
+
+	<!-- base footprint to make everything work better -->
+  <link name="base_footprint">
+    <visual>
+      <geometry>
+        <box size="0.001 0.001 0.001"/>
+      </geometry>
+			<origin rpy="0 0 0" xyz="0 0 0"/>
+			<material name="white"/>
+    </visual>
+		<inertial>
+			<mass value="0.0001"/>
+			<origin xyz="0 0 0"/>
+			<inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+		</inertial>
+  </link>
+	<gazebo reference="base_footprint">
+		<material>Gazebo/White</material>
+	</gazebo>
+
+
+	<!-- base link for whole car ${wheelbase/2} -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.001 0.001 0.001"/>
+      </geometry>
+			<material name="white"/>
+    </visual>
+		<collision>
+			<geometry>
+				<box size="0.001 0.001 0.001"/>
+			</geometry>
+		</collision>
+		<xacro:default_inertial mass="1"/>
+  </link>
+	<gazebo reference="base_link">
+		<material>Gazebo/White</material>
+	</gazebo>
+	<joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="${wheelbase/2} 0 ${rearwheeldia/2} "/>
+  </joint>
+
+	<!-- main chasis -->
+  <link name="chassis">
+    <visual>
+      <geometry>
+        <box size="${chasislength} ${chasiswidth} ${chasisheight}"/>
+      </geometry>
+    </visual>
+		<collision> <!-- this defines the collision shape (usually same as visual shape)-->
+			<geometry>
+        <box size="${chasislength} ${chasiswidth} ${chasisheight}"/>
+			</geometry>
+		</collision>
+		<xacro:cube_inertial
+        dimx="${chasislength}" dimy="${chasiswidth}"
+        dimz="${chasisheight}" mass="${chasismass}" />
+  </link>
+	<!-- <gazebo reference="chassis">
+		<material>Gazebo/Green</material>
+	</gazebo> -->
+	<joint name="base_link_to_chasis" type="fixed">
+    <parent link="base_link"/>
+    <child link="chassis"/>
+    <origin xyz="0 0 ${chasisheight/2 + rear_shock_offset} "/>
+  </joint>
+
+	<!-- rear axle -->
+  <link name="rear_axle">
+    <visual>
+      <geometry>
+        <box size="${axlesize} ${rearwheelsep-rearwheelwidth} ${axlesize}"/>
+      </geometry>
+			<origin rpy="0 0 0" xyz="0 0 0"/>
+			<material name="hideaxle"/>
+    </visual>
+		<collision>
+			<geometry>
+				<box size="${axlesize} ${rearwheelsep-rearwheelwidth} ${axlesize}"/>
+			</geometry>
+		</collision>
+		<xacro:default_inertial mass="10"/>
+  </link>
+	<gazebo reference="rear_axle">
+		<material>Gazebo/White</material>
+	</gazebo>
+	<joint name="base_link_to_rear_axle" type="fixed">
+    <parent link="chassis"/>
+    <child link="rear_axle"/>
+    <origin xyz="${-wheelbase/2} 0 ${-chasisheight/2 - rear_shock_offset} "/>
+  </joint>
+
+	<!-- right rear wheel -->
+  <link name="right_rear_wheel">
+    <visual>
+      <geometry>
+        <cylinder length="${rearwheelwidth}" radius="${rearwheeldia/2}"/>
+      </geometry>
+			<origin rpy="${pi/2} 0 0" xyz="0 0 0 "/>
+			<material name="black"/>
+    </visual>
+		<collision>
+			<geometry>
+				<cylinder length="${rearwheelwidth}" radius="${rearwheeldia/2}"/>
+			</geometry>
+			<origin rpy="${pi/2} 0 0" xyz="0 0 0 "/>
+		</collision>
+		<xacro:cylinder_inertial
+          rad="${rearwheeldia / 2}"
+					height="${rearwheelwidth}" mass="${wheelmass}"/>
+  </link>
+	<gazebo reference="right_rear_wheel">
+		<mu1 value="${wheelfriction1}"/>
+		<mu2 value="${wheelfriction2}"/>
+		<kp value="${wheelcontactstiffness}" />
+		<kd value="${wheelcontactdamping}" />
+		<material>Gazebo/FlatBlack</material>
+	</gazebo>
+	<joint name="rear_axle_to_right_wheel" type="continuous">
+		<axis xyz="0 1 0"/>
+    <parent link="rear_axle"/>
+    <child link="right_rear_wheel"/>
+    <origin xyz="0 ${-rearwheelsep/2} 0"/>
+		<limit effort="${propel_eff_limit}" velocity="${propel_vel_limit}"/>
+  </joint>
+
+	<!-- left rear wheel -->
+  <link name="left_rear_wheel">
+    <visual>
+      <geometry>
+        <cylinder length="${rearwheelwidth}" radius="${rearwheeldia/2}"/>
+      </geometry>
+			<origin rpy="${pi/2} 0 0" xyz="0 0 0 "/>
+			<material name="black"/>
+    </visual>
+		<collision>
+			<geometry>
+				<cylinder length="${rearwheelwidth}" radius="${rearwheeldia/2}"/>
+			</geometry>
+			<origin rpy="${pi/2} 0 0" xyz="0 0 0 "/>
+		</collision>
+		<xacro:cylinder_inertial
+          rad="${rearwheeldia / 2}"
+					height="${rearwheelwidth}" mass="${wheelmass}"/>
+  </link>
+	<gazebo reference="left_rear_wheel">
+		<mu1 value="${wheelfriction1}"/>
+		<mu2 value="${wheelfriction2}"/>
+		<kp value="${wheelcontactstiffness}" />
+		<kd value="${wheelcontactdamping}" />
+		<material>Gazebo/FlatBlack</material>
+	</gazebo>
+	<joint name="rear_axle_to_left_wheel" type="continuous">
+		<axis xyz="0 1 0"/>
+    <parent link="rear_axle"/>
+    <child link="left_rear_wheel"/>
+    <origin xyz="0 ${rearwheelsep/2} 0"/>
+		<limit effort="${propel_eff_limit}" velocity="${propel_vel_limit}"/>
+  </joint>
+
+
+	<!-- front axle right -->
+  <link name="front_axle_right">
+    <visual>
+      <geometry>
+        <box size="${axlesize} ${axlesize} ${axlesize}"/>
+      </geometry>
+			<origin rpy="0 0 0" xyz="0 0 0"/>
+			<material name="hideaxle"/>
+    </visual>
+		<collision>
+			<geometry>
+				<box size="${axlesize} ${axlesize} ${axlesize}"/>
+			</geometry>
+		</collision>
+		<xacro:default_inertial mass="10"/>
+  </link>
+	<gazebo reference="front_axle_right">
+		<material>Gazebo/White</material>
+	</gazebo>
+	<joint name="base_link_to_front_axle_right" type="revolute">
+		<axis xyz="0 0 1"/>
+    <limit effort="${steer_eff_limit}" lower="${turnmin}" upper="${turnmax}" velocity="${steer_vel_limit}"/>
+    <parent link="chassis"/>
+    <child link="front_axle_right"/>
+    <origin xyz="${wheelbase/2} ${-frontwheelsep/2} ${-chasisheight/2 - front_shock_offset} "/>
+  </joint>
+
+	<!-- front axle left -->
+	<link name="front_axle_left">
+    <visual>
+      <geometry>
+        <box size="${axlesize} ${axlesize} ${axlesize}"/>
+      </geometry>
+			<origin rpy="0 0 0" xyz="0 0 0"/>
+			<material name="hideaxle"/>
+    </visual>
+		<collision>
+			<geometry>
+				<box size="${axlesize} ${axlesize} ${axlesize}"/>
+			</geometry>
+		</collision>
+		<xacro:default_inertial mass="10"/>
+  </link>
+	<gazebo reference="front_axle_left">
+		<material>Gazebo/White</material>
+	</gazebo>
+	<joint name="base_link_to_front_axle_left" type="revolute">
+		<axis xyz="0 0 1"/>
+    <limit effort="${steer_eff_limit}" lower="${turnmin}" upper="${turnmax}" velocity="${steer_vel_limit}"/>
+    <parent link="chassis"/>
+    <child link="front_axle_left"/>
+    <origin xyz="${wheelbase/2} ${frontwheelsep/2} ${-chasisheight/2 - front_shock_offset} "/>
+  </joint>
+
+
+	<!-- right front wheel -->
+  <link name="right_front_wheel">
+    <visual>
+      <geometry>
+        <cylinder length="${frontwheelwidth}" radius="${frontwheeldia/2}"/>
+      </geometry>
+			<origin rpy="${pi/2} 0 0" xyz="0 0 0 "/>
+			<material name="black"/>
+    </visual>
+		<collision>
+			<geometry>
+				<cylinder length="${frontwheelwidth}" radius="${frontwheeldia/2}"/>
+			</geometry>
+			<origin rpy="${pi/2} 0 0" xyz="0 0 0 "/>
+		</collision>
+		<xacro:cylinder_inertial
+          rad="${frontwheeldia / 2}"
+					height="${frontwheelwidth}" mass="${wheelmass}"/>
+  </link>
+	<gazebo reference="right_front_wheel">
+		<mu1 value="${wheelfriction1}"/>
+		<mu2 value="${wheelfriction2}"/>
+		<kp value="${wheelcontactstiffness}" />
+		<kd value="${wheelcontactdamping}" />
+		<material>Gazebo/FlatBlack</material>
+	</gazebo>
+	<joint name="front_axle_to_right_wheel" type="continuous">
+		<axis xyz="0 1 0"/>
+    <parent link="front_axle_right"/>
+    <child link="right_front_wheel"/>
+    <origin xyz="0 0 0"/>
+		<limit effort="${propel_eff_limit}" velocity="${propel_vel_limit}"/>
+  </joint>
+
+	<!-- left front wheel -->
+  <link name="left_front_wheel">
+    <visual>
+      <geometry>
+       <cylinder length="${frontwheelwidth}" radius="${frontwheeldia/2}"/>
+      </geometry>
+			<origin rpy="${pi/2} 0 0" xyz="0 0 0 "/>
+			<material name="black"/>
+    </visual>
+		<collision>
+			<geometry>
+				<cylinder length="${frontwheelwidth}" radius="${frontwheeldia/2}"/>
+			</geometry>
+			<origin rpy="${pi/2} 0 0" xyz="0 0 0 "/>
+		</collision>
+		<xacro:cylinder_inertial
+          rad="${frontwheeldia / 2}"
+					height="${frontwheelwidth}" mass="${wheelmass}"/>
+  </link>
+	<gazebo reference="left_front_wheel">
+		<mu1 value="${wheelfriction1}"/>
+		<mu2 value="${wheelfriction2}"/>
+		<kp value="${wheelcontactstiffness}" />
+		<kd value="${wheelcontactdamping}" />
+		<material>Gazebo/FlatBlack</material>
+	</gazebo>
+	<joint name="front_axle_to_left_wheel" type="continuous">
+		<axis xyz="0 1 0"/>
+    <parent link="front_axle_left"/>
+    <child link="left_front_wheel"/>
+    <origin xyz="0 0 0"/>
+		<limit effort="${propel_eff_limit}" velocity="${propel_vel_limit}"/>
+  </joint>
+
+
+
+
+	<!-- START OF LOADER ARM STUFF -->
+	<!-- dummy link to hold loader -->
+
+<!--
+  <link name="back_wall">
+    <visual>
+      <geometry>
+
+      </geometry>
+			<origin rpy="0 ${pi/2} 0" xyz="0 0 0 "/>
+			<material name="grey"/>
+    </visual>
+		<collision>
+			<geometry>
+       <box size="0.001 0.001 0.001"/>
+			</geometry>
+			<origin rpy="0 ${pi/2} 0" xyz="0 0 0 "/>
+		</collision>
+		<xacro:default_inertial mass="1"/>
+  </link>
+	<gazebo reference="back_wall">
+		<material>Gazebo/DarkGrey</material>
+	</gazebo>
+
+	<joint name="chassis_to_back" type="fixed">
+    <parent link="chassis"/>
+    <child link="back_wall"/>
+    <origin xyz="${chasislength/2 - basedepth/2 + thickness/2} 0 ${chasisheight/2 + thickness/2}"/>
+  </joint>
+-->
+
+	<!-- left arm -->
+  <link name="left_arm">
+    <visual>
+      <geometry>
+        <box size="${armlen} ${armsize} ${armsize}"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="${armlen/2 - thickness/2} 0 0"/>
+			<!-- <material name="red"/> -->
+    </visual>
+		<collision>
+			<geometry>
+        <box size="${armlen} ${armsize} ${armsize}"/>
+			</geometry>
+      <origin rpy="0 0 0" xyz="${armlen/2 - thickness/2} 0 0"/>
+		</collision>
+		<xacro:default_inertial mass="1"/>
+  </link>
+	<gazebo reference="left_arm">
+		<material>Gazebo/Red</material>
+	</gazebo>
+
+	<joint name="back_to_left_arm" type="revolute">
+		<axis xyz="0 -1 0"/>
+    <limit effort="1000.0" lower="${liftmin}" upper="${liftmax}" velocity="0.5"/>
+    <parent link="chassis"/>
+    <child link="left_arm"/>
+    <origin xyz="${arm_x} ${framewidth/2 - armsize/2} ${arm_z}"/>
+  </joint>
+
+
+	<!-- right arm -->
+  <link name="right_arm">
+    <visual>
+      <geometry>
+        <box size="${armlen} ${armsize} ${armsize}"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="${armlen/2 - thickness/2} 0 0"/>
+			<!-- <material name="red"/> -->
+    </visual>
+		<collision>
+			<geometry>
+        <box size="${armlen} ${armsize} ${armsize}"/>
+			</geometry>
+      <origin rpy="0 0 0" xyz="${armlen/2 - thickness/2} 0 0"/>
+		</collision>
+		<xacro:default_inertial mass="1"/>
+  </link>
+	<gazebo reference="right_arm">
+		<material>Gazebo/Red</material>
+	</gazebo>
+
+	<joint name="back_to_right_arm" type="revolute">
+		<axis xyz="0 -1 0"/>
+    <limit effort="1000.0" lower="${liftmin}" upper="${liftmax}" velocity="0.5"/>
+    <parent link="chassis"/>
+    <child link="right_arm"/>
+    <origin xyz="${arm_x} ${-framewidth/2 + armsize/2} ${arm_z}"/>
+    <mimic  joint="back_to_left_arm" multiplier="1" offset="0"/>
+  </joint>
+
+
+	<!-- front grate -->
+  <link name="front_grate">
+    <visual>
+      <geometry>
+        <box size="${frameheight} ${framewidth} ${thickness}"/>
+      </geometry>
+			<!-- <origin rpy="0 ${pi/2} 0" xyz="0 0 ${-chasisheight/2} "/> -->
+			<origin rpy="0 ${pi/2} 0" xyz="${frame_x} 0 ${chasisheight-frame_z} "/>
+			<material name="grey"/>
+    </visual>
+    <visual>
+      <geometry>
+        <box size="${forkheight} ${forkwidth} ${forklen}"/>
+      </geometry>
+			<!-- <origin rpy="0 ${pi/2} 0" xyz="0 0 ${-chasisheight/2} "/> -->
+			<origin rpy="0 ${pi/2} 0" xyz="${frame_x+forklen/2} ${forksep/2} ${chasisheight-frame_z-frameheight/2} "/>
+			<material name="grey"/>
+    </visual>
+    <visual>
+      <geometry>
+        <box size="${forkheight} ${forkwidth} ${forklen}"/>
+      </geometry>
+			<!-- <origin rpy="0 ${pi/2} 0" xyz="0 0 ${-chasisheight/2} "/> -->
+			<origin rpy="0 ${pi/2} 0" xyz="${frame_x+forklen/2} ${-forksep/2} ${chasisheight-frame_z-frameheight/2} "/>
+			<material name="grey"/>
+    </visual>
+		<collision>
+			<geometry>
+				<box size="${framewidth} ${frameheight} ${thickness}"/>
+			</geometry>
+			<!-- <origin rpy="0 ${pi/2} 0" xyz="0 0 ${-chasisheight/2} "/> -->
+			<origin rpy="0 ${pi/2} 0" xyz="${frame_x} 0 ${chasisheight-frame_z} "/>
+		</collision>
+		<xacro:default_inertial mass="1"/>
+  </link>
+	<gazebo reference="front_grate">
+		<material>Gazebo/DarkGrey</material>
+	</gazebo>
+
+	<!-- lift front wall with arm -->
+	<joint name="left_arm_to_front_grate" type="revolute">
+		<axis xyz="0 -1 0"/>
+    <limit effort="1000.0" lower="${liftmin}" upper="${liftmax}" velocity="0.5"/>
+    <parent link="left_arm"/>
+    <child link="front_grate"/>
+    <!-- <origin xyz="${armlen-thickness} ${-framewidth/2 - armsize/2} 0"/> -->
+    <origin xyz="${armlen-thickness} ${-framewidth/2 + armsize/2} 0"/>
+  </joint>
+
+
+	<!-- START OF THE TRANSMISSIONS STUFF (NECCESARY TO USE MOTOR CONTROL IN GAZEBO) -->
+	<!-- Steering Transmissions -->
+	<transmission name="right_steer_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="right_steer_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+    <joint name="base_link_to_front_axle_right">
+      <hardwareInterface>PositionJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+	<transmission name="left_steer_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="left_steer_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+    <joint name="base_link_to_front_axle_left">
+      <hardwareInterface>PositionJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+
+	<!-- Wheel transmissions -->
+	<transmission name="right_front_wheel_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="right_front_wheel_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+    <joint name="front_axle_to_right_wheel">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+	<transmission name="right_rear_wheel_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="right_rear_wheel_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+    <joint name="rear_axle_to_right_wheel">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+	<transmission name="left_front_wheel_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="left_front_wheel_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+    <joint name="front_axle_to_left_wheel">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+	<transmission name="left_rear_wheel_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="left_rear_wheel_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+    <joint name="rear_axle_to_left_wheel">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+
+	<!-- Loader arm transmissions -->
+	<transmission name="left_arm_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="left_arm_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+    <joint name="back_to_left_arm">
+      <hardwareInterface>PositionJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+	<transmission name="right_arm_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="right_arm_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+    <joint name="back_to_right_arm">
+      <hardwareInterface>PositionJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+	<transmission name="left_grate_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="left_grate_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+    <joint name="left_arm_to_front_grate">
+      <hardwareInterface>PositionJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+
+	<!-- Specify Plugin for Gazebo-->
+	<gazebo>
+    <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
+      <robotNamespace>/</robotNamespace>
+    </plugin>
+
+
+
+
+
+	<!-- Provide pose as an odom topic -->
+    <plugin name="p3d_base_controller" filename="libgazebo_ros_p3d.so">
+      <alwaysOn>true</alwaysOn>
+      <updateRate>4.0</updateRate> <!-- this controls the publish rate of pgn129026 messages -->
+      <bodyName>base_link</bodyName>
+      <topicName>ground_truth/state</topicName>
+      <gaussianNoise>0.01</gaussianNoise>
+      <frameName>world</frameName>
+      <xyzOffsets>0 0 0</xyzOffsets>
+      <rpyOffsets>0 0 0</rpyOffsets>
+    </plugin>
+
+	<plugin name="magnetic" filename="libhector_gazebo_ros_magnetic.so">
+		 <alwaysOn>1</alwaysOn>
+		 <updateRate>30.0</updateRate> <!-- make this the same rate as imu plugin -->
+		 <bodyName>imu_link</bodyName>
+			<frameId>mag_link</frameId> <!-- 'frameId' not 'frameName'-->
+		 <topicName>/imu/mag</topicName>
+	</plugin>
+
+
+
+
+  </gazebo>
+
+
+
+	<!-- Range finder out the back to sense for objects behind us -->
+	<joint name="radar_joint_back" type="fixed">
+    <origin xyz="${-chasislength/2-ranger_size/2} 0 ${-chasisheight/2}" rpy="0 0 ${pi}"/>
+    <parent link="chassis"/>
+    <child link="radar_link"/>
+  </joint>
+  <link name="radar_link">
+    <visual>
+      <geometry>
+        <box size="${ranger_size} ${ranger_size} ${ranger_size}"/>
+      </geometry>
+    </visual>
+    <inertial>
+      <mass value="1e-5" />
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+    </inertial>
+  </link>
+	<gazebo reference="radar_link">
+     <sensor type="ray" name="rear_range">
+      <pose>0 0 0 0 0 0</pose>
+      <update_rate>30</update_rate>
+			<visualize>false</visualize>
+      <ray>
+          <scan>
+            <horizontal>
+              <samples>5</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.2</min_angle>
+              <max_angle>0.2</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>5</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.01</min_angle>
+              <max_angle>0.01</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.01</min>
+            <max>5.0</max>
+            <resolution>0.01</resolution>
+          </range>
+			</ray>
+      <plugin name="gazebo_ros_rear_range" filename="libgazebo_ros_range.so">
+				<gaussianNoise>0.005</gaussianNoise>
+        <alwaysOn>true</alwaysOn>
+				<updateRate>30</updateRate>
+        <topicName>/back_up/radar</topicName>
+        <frameName>radar_link</frameName>
+				<fov>0.4</fov>
+				<radiation>ultrasound</radiation>
+      </plugin>
+    </sensor>
+		<material>Gazebo/Blue</material>
+  </gazebo>
+
+
+	<!-- Setup a fake gps sensor -->
+	<joint name="gps_joint" type="fixed">
+    <axis xyz="1 0 0"/> <!-- 0 1 0 -->
+    <origin xyz="${-(wheelbase/2 + rackback)} ${gps_y} ${rackheight}"/>
+    <parent link="base_link"/>
+    <child link="gps_link"/>
+  </joint>
+	<link name="gps_link">
+		<inertial>
+		  <mass value="0.001"/>
+		  <origin rpy="0 0 0" xyz="0 0 0"/>
+		  <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.0001"/>
+		</inertial>
+		<visual>
+		  <origin rpy="0 0 0" xyz="0 0 0"/>
+		  <geometry>
+		    <box size="0.001 0.001 0.001"/>
+		  </geometry>
+		</visual>
+		<collision>
+		  <origin rpy="0 0 0" xyz="0 0 0"/>
+		  <geometry>
+		    <box size=".001 .001 .001"/>
+		  </geometry>
+		</collision>
+	</link>
+	<gazebo>
+		<plugin name="novatel_gps_sim" filename="libnorthstar_gazebo_ros_gps.so">
+		  <alwaysOn>1</alwaysOn>
+		  <updateRate>10.0</updateRate>
+		  <bodyName>gps_link</bodyName>
+			<frameId>gps_link</frameId> <!-- 'frameId' not 'frameName'-->
+		  <topicName>gps/fix</topicName>
+		  <velocityTopicName>gps/fix_velocity</velocityTopicName>
+		  <drift>0 0 0</drift>
+		  <gaussianNoise>0.04 0.04 0.1</gaussianNoise>
+		  <velocityDrift>0 0 0</velocityDrift>
+		  <velocityGaussianNoise>0.1 0.1 0.1</velocityGaussianNoise>
+			<!-- Here we set the initial GPS location (Nordborg, DN)  default is in hamburg, germany-->
+			<referenceLatitude>$(arg latitude)</referenceLatitude>
+			<referenceLongitude>$(arg longitude)</referenceLongitude>
+		</plugin>
+	</gazebo>
+
+	<!-- Setup a fake IMU sensor -->
+  <joint name="imu_joint" type="fixed">
+    <axis xyz="1 0 0"/> <!-- 0 1 0 -->
+    <origin xyz="-0.55 0.0 0.48 "/>
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+  </joint>
+	<link name="imu_link">
+		<inertial>
+		  <mass value="0.001"/>
+		  <origin rpy="0 0 0" xyz="0 0 0"/>
+		  <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.0001"/>
+		</inertial>
+		<visual>
+		  <origin rpy="0 0 0" xyz="0 0 0"/>
+		  <geometry>
+		    <box size="0.001 0.001 0.001"/>
+		  </geometry>
+		</visual>
+		<collision>
+		  <origin rpy="0 0 0" xyz="0 0 0"/>
+		  <geometry>
+		    <box size=".001 .001 .001"/>
+		  </geometry>
+		</collision>
+	</link>
+	<gazebo>
+		<!-- Old IMU plugin messes with frame_id: dont use libgazebo_ros_imu.so-->
+    <plugin name="imu_plugin" filename="libhector_gazebo_ros_imu.so">
+        <alwaysOn>true</alwaysOn>
+        <bodyName>imu_link</bodyName>
+				<frameId>imu_link</frameId> <!-- 'frameId' not 'frameName'-->
+        <topicName>imu/data</topicName>
+        <serviceName>imu/service</serviceName>
+        <gaussianNoise>0.001</gaussianNoise>
+        <updateRate>50.0</updateRate>
+    </plugin>
+	</gazebo>
+<xacro:if value="$(arg use_velodyne)">
+	<!-- 3D LIDAR -->
+  <xacro:include filename="$(find velodyne_description)/urdf/HDL-32E.urdf.xacro"/>
+  <HDL-32E parent="base_link" name="velodyne" topic="/velodyne_points" hz="10" samples="900" noise="0.03" gpu="true">
+		<origin xyz="${-(wheelbase/2 + rackback)} 0.1 ${rackheight}" rpy="0 0 0"/>
+  </HDL-32E>
+</xacro:if>
+
+	<!-- Camera -->
+  <xacro:include filename="$(find fitzroy_description)/urdf/picam.urdf.xacro"/>
+  <picam parent="base_link" name="camera">
+    <origin xyz="${-(wheelbase/2 + rackback)} 0 ${rackheight}" rpy="0 0 0"/>
+  </picam>
+
+</robot>
+
+
+
