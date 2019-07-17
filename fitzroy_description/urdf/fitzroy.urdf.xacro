@@ -15,7 +15,7 @@
 
 	<!-- Front Loader Properties-->
 	<xacro:property name="framewidth" value="0.07" />
-	<xacro:property name="frameheight" value="0.1" />
+	<xacro:property name="frameheight" value="0.05" />
 	<xacro:property name="thickness" value="0.01" />
 	<xacro:property name="armsize" value="0.01" />
 	<xacro:property name="armlen" value="0.10" />
@@ -37,7 +37,7 @@
 	<xacro:property name="chasislength" value="0.202" />
 	<xacro:property name="chasismass" value="0.25"/>
 	<!-- Backrack on tractor that Reed made-->
-	<xacro:property name="rackheight" value="0.19" />
+	<xacro:property name="rackheight" value="0.09" />
 	<xacro:property name="rackback" value="-0.015" />
 
 	<!-- Wheel properties-->
@@ -89,24 +89,11 @@
   </joint>
 
 	<!-- main chasis -->
-  <link name="chassis">
-    <visual>
-      <geometry>
-        <box size="${chasislength} ${chasiswidth} ${chasisheight}"/>
-      </geometry>
-    </visual>
-		<collision> <!-- this defines the collision shape (usually same as visual shape)-->
-			<geometry>
-        <box size="${chasislength} ${chasiswidth} ${chasisheight}"/>
-			</geometry>
-		</collision>
-		<xacro:cube_inertial
-        dimx="${chasislength}" dimy="${chasiswidth}"
-        dimz="${chasisheight}" mass="${chasismass}" />
-  </link>
-	<!-- <gazebo reference="chassis">
-		<material>Gazebo/Green</material>
-	</gazebo> -->
+	<xacro:cube_plastic
+      name="chassis" 
+      dimx="${chasislength}" 
+      dimy="${chasiswidth}"
+      dimz="${chasisheight}" />
 	<joint name="base_link_to_chasis" type="fixed">
     <parent link="base_link"/>
     <child link="chassis"/>
@@ -412,54 +399,58 @@
   </joint>
 
 
-	<!-- front grate -->
-  <link name="front_grate">
-    <visual>
-      <geometry>
-        <box size="${frameheight} ${framewidth} ${thickness}"/>
-      </geometry>
-			<!-- <origin rpy="0 ${pi/2} 0" xyz="0 0 ${-chasisheight/2} "/> -->
-			<origin rpy="0 ${pi/2} 0" xyz="${frame_x} 0 ${chasisheight-frame_z} "/>
-			<material name="grey"/>
-    </visual>
-    <visual>
-      <geometry>
-        <box size="${forkheight} ${forkwidth} ${forklen}"/>
-      </geometry>
-			<!-- <origin rpy="0 ${pi/2} 0" xyz="0 0 ${-chasisheight/2} "/> -->
-			<origin rpy="0 ${pi/2} 0" xyz="${frame_x+forklen/2} ${forksep/2} ${chasisheight-frame_z-frameheight/2} "/>
-			<material name="grey"/>
-    </visual>
-    <visual>
-      <geometry>
-        <box size="${forkheight} ${forkwidth} ${forklen}"/>
-      </geometry>
-			<!-- <origin rpy="0 ${pi/2} 0" xyz="0 0 ${-chasisheight/2} "/> -->
-			<origin rpy="0 ${pi/2} 0" xyz="${frame_x+forklen/2} ${-forksep/2} ${chasisheight-frame_z-frameheight/2} "/>
-			<material name="grey"/>
-    </visual>
-		<collision>
-			<geometry>
-        <box size="${frameheight} ${framewidth} ${thickness}"/>
-			</geometry>
-			<!-- <origin rpy="0 ${pi/2} 0" xyz="0 0 ${-chasisheight/2} "/> -->
-			<origin rpy="0 ${pi/2} 0" xyz="${frame_x} 0 ${chasisheight-frame_z} "/>
-		</collision>
-		<xacro:default_inertial mass="1"/>
+	<!-- START OF FORK ASSEMBLY -->
+	<!-- We use separate links for each part to have accurate physics properties -->
+
+	<!-- fork assembly -->
+  <link name="fork_assembly">
   </link>
-	<gazebo reference="front_grate">
-		<material>Gazebo/DarkGrey</material>
-	</gazebo>
 
 	<!-- lift front wall with arm -->
-	<joint name="left_arm_to_front_grate" type="revolute">
+	<joint name="left_arm_to_fork_assembly" type="revolute">
 		<axis xyz="0 -1 0"/>
     <limit effort="1000.0" lower="${liftmin}" upper="${liftmax}" velocity="0.5"/>
     <parent link="left_arm"/>
-    <child link="front_grate"/>
+    <child link="fork_assembly"/>
     <!-- <origin xyz="${armlen-thickness} ${-framewidth/2 - armsize/2} 0"/> -->
     <origin xyz="${armlen-thickness} ${-framewidth/2 + armsize/2} 0"/>
   </joint>
+
+
+	<!-- backstop -->
+	<xacro:cube_aluminum
+      name="fork_backstop" 
+      dimx="${frameheight}" 
+      dimy="${framewidth}"
+      dimz="${thickness}" />
+	<joint name="fork_assembly_to_fork_backstop" type="fixed">
+    <parent link="fork_assembly"/>
+    <child link="fork_backstop"/>
+		<origin rpy="0 ${pi/2} 0" xyz="${frame_x} 0 ${chasisheight-frame_z} "/>
+  </joint>
+	<!-- left fork -->
+	<xacro:cube_aluminum
+      name="left_fork" 
+      dimx="${forkheight}" 
+      dimy="${forkwidth}"
+      dimz="${forklen}" />
+	<joint name="fork_assembly_to_left_fork" type="fixed">
+    <parent link="fork_assembly"/>
+    <child link="left_fork"/>
+    <origin rpy="0 ${pi/2} 0" xyz="${frame_x+forklen/2} ${ forksep/2} ${chasisheight-frame_z-frameheight/2} "/>
+  </joint>
+	<!-- right fork -->
+	<xacro:cube_aluminum
+      name="right_fork" 
+      dimx="${forkheight}" 
+      dimy="${forkwidth}"
+      dimz="${forklen}" />
+	<joint name="fork_assembly_to_right_fork" type="fixed">
+    <parent link="fork_assembly"/>
+    <child link="right_fork"/>
+    <origin rpy="0 ${pi/2} 0" xyz="${frame_x+forklen/2} ${-forksep/2} ${chasisheight-frame_z-frameheight/2} "/>
+  </joint>
+
 
 
 	<!-- START OF THE TRANSMISSIONS STUFF (NECCESARY TO USE MOTOR CONTROL IN GAZEBO) -->
@@ -545,7 +536,7 @@
     <actuator name="left_grate_motor">
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
-    <joint name="left_arm_to_front_grate">
+    <joint name="left_arm_to_fork_assembly">
       <hardwareInterface>PositionJointInterface</hardwareInterface>
     </joint>
   </transmission>
@@ -572,104 +563,17 @@
       <rpyOffsets>0 0 0</rpyOffsets>
     </plugin>
 
-	<plugin name="magnetic" filename="libhector_gazebo_ros_magnetic.so">
-		 <alwaysOn>1</alwaysOn>
-		 <updateRate>30.0</updateRate> <!-- make this the same rate as imu plugin -->
-		 <bodyName>imu_link</bodyName>
-			<frameId>mag_link</frameId> <!-- 'frameId' not 'frameName'-->
-		 <topicName>/imu/mag</topicName>
-	</plugin>
-
-
-
 
   </gazebo>
 
-
-
-	<!-- Range finder out the back to sense for objects behind us -->
-	<joint name="radar_joint_back" type="fixed">
-    <origin xyz="${-chasislength/2-ranger_size/2} 0 ${-chasisheight/2}" rpy="0 0 ${pi}"/>
-    <parent link="chassis"/>
-    <child link="radar_link"/>
-  </joint>
-  <link name="radar_link">
-    <visual>
-      <geometry>
-        <box size="${ranger_size} ${ranger_size} ${ranger_size}"/>
-      </geometry>
-    </visual>
-    <inertial>
-      <mass value="1e-5" />
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
-    </inertial>
-  </link>
-	<gazebo reference="radar_link">
-     <sensor type="ray" name="rear_range">
-      <pose>0 0 0 0 0 0</pose>
-      <update_rate>30</update_rate>
-			<visualize>false</visualize>
-      <ray>
-          <scan>
-            <horizontal>
-              <samples>5</samples>
-              <resolution>1</resolution>
-              <min_angle>-0.2</min_angle>
-              <max_angle>0.2</max_angle>
-            </horizontal>
-            <vertical>
-              <samples>5</samples>
-              <resolution>1</resolution>
-              <min_angle>-0.01</min_angle>
-              <max_angle>0.01</max_angle>
-            </vertical>
-          </scan>
-          <range>
-            <min>0.01</min>
-            <max>5.0</max>
-            <resolution>0.01</resolution>
-          </range>
-			</ray>
-      <plugin name="gazebo_ros_rear_range" filename="libgazebo_ros_range.so">
-				<gaussianNoise>0.005</gaussianNoise>
-        <alwaysOn>true</alwaysOn>
-				<updateRate>30</updateRate>
-        <topicName>/back_up/radar</topicName>
-        <frameName>radar_link</frameName>
-				<fov>0.4</fov>
-				<radiation>ultrasound</radiation>
-      </plugin>
-    </sensor>
-		<material>Gazebo/Blue</material>
-  </gazebo>
 
 
 	<!-- Setup a fake gps sensor -->
 	<joint name="gps_joint" type="fixed">
-    <axis xyz="1 0 0"/> <!-- 0 1 0 -->
-    <origin xyz="${-(wheelbase/2 + rackback)} ${gps_y} ${rackheight}"/>
     <parent link="base_link"/>
     <child link="gps_link"/>
   </joint>
 	<link name="gps_link">
-		<inertial>
-		  <mass value="0.001"/>
-		  <origin rpy="0 0 0" xyz="0 0 0"/>
-		  <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.0001"/>
-		</inertial>
-		<visual>
-		  <origin rpy="0 0 0" xyz="0 0 0"/>
-		  <geometry>
-		    <box size="0.001 0.001 0.001"/>
-		  </geometry>
-		</visual>
-		<collision>
-		  <origin rpy="0 0 0" xyz="0 0 0"/>
-		  <geometry>
-		    <box size=".001 .001 .001"/>
-		  </geometry>
-		</collision>
 	</link>
 	<gazebo>
 		<plugin name="novatel_gps_sim" filename="libnorthstar_gazebo_ros_gps.so">
@@ -691,29 +595,10 @@
 
 	<!-- Setup a fake IMU sensor -->
   <joint name="imu_joint" type="fixed">
-    <axis xyz="1 0 0"/> <!-- 0 1 0 -->
-    <origin xyz="-0.55 0.0 0.48 "/>
     <parent link="base_link"/>
     <child link="imu_link"/>
   </joint>
 	<link name="imu_link">
-		<inertial>
-		  <mass value="0.001"/>
-		  <origin rpy="0 0 0" xyz="0 0 0"/>
-		  <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.0001"/>
-		</inertial>
-		<visual>
-		  <origin rpy="0 0 0" xyz="0 0 0"/>
-		  <geometry>
-		    <box size="0.001 0.001 0.001"/>
-		  </geometry>
-		</visual>
-		<collision>
-		  <origin rpy="0 0 0" xyz="0 0 0"/>
-		  <geometry>
-		    <box size=".001 .001 .001"/>
-		  </geometry>
-		</collision>
 	</link>
 	<gazebo>
 		<!-- Old IMU plugin messes with frame_id: dont use libgazebo_ros_imu.so-->
@@ -727,13 +612,6 @@
         <updateRate>50.0</updateRate>
     </plugin>
 	</gazebo>
-<xacro:if value="$(arg use_velodyne)">
-	<!-- 3D LIDAR -->
-  <xacro:include filename="$(find velodyne_description)/urdf/HDL-32E.urdf.xacro"/>
-  <HDL-32E parent="base_link" name="velodyne" topic="/velodyne_points" hz="10" samples="900" noise="0.03" gpu="true">
-		<origin xyz="${-(wheelbase/2 + rackback)} 0.1 ${rackheight}" rpy="0 0 0"/>
-  </HDL-32E>
-</xacro:if>
 
 	<!-- Camera -->
   <xacro:include filename="$(find fitzroy_description)/urdf/picam.urdf.xacro"/>

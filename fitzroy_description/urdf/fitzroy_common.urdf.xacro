@@ -94,6 +94,31 @@
 	  </gazebo>
   </xacro:macro>
 
+	<!-- macro for creating a plastic cube -->
+	<xacro:macro name="cube_plastic"
+               params="name dimx dimy dimz density:=1000">
+    <xacro:property name="mass" value="${density*dimx*dimy*dimz}"/>
+    <link name="${name}">
+      <visual>
+        <geometry>
+          <box size="${dimx} ${dimy} ${dimz}"/>
+        </geometry>
+			  <origin rpy="0 0 0" xyz="0 0 0"/>
+			  <material name="red"/>
+      </visual>
+		  <collision>
+        <geometry>
+          <box size="${dimx} ${dimy} ${dimz}"/>
+        </geometry>
+			  <origin rpy="0 0 0" xyz="0 0 0"/>
+		  </collision>
+      <cube_inertial dimx="${dimx}" dimy="${dimy}" dimz="${dimz}" mass="${mass}" />
+    </link>
+	  <gazebo reference="${name}">
+		  <material>Gazebo/Red</material>
+	  </gazebo>
+  </xacro:macro>
+
 
 </robot>
 

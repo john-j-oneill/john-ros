@@ -8,6 +8,7 @@ Panels:
         - /Status1
         - /Grid1
         - /RobotModel1
+        - /TF1
       Splitter Ratio: 0.5
     Tree Height: 565
   - Class: rviz/Selection
@@ -85,6 +86,15 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        fork_assembly:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        fork_backstop:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         front_axle_left:
           Alpha: 1
           Show Axes: false
@@ -95,22 +105,20 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        front_grate:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         gps_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
         imu_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
         left_arm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        left_fork:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -125,17 +133,17 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        radar_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         rear_axle:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
         right_arm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        right_fork:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -150,12 +158,12 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        ultrasonic_sensor_link:
+        ultrasonic_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        ultrasonic_sensor_speakers_link:
+        ultrasonic_speakers_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -166,6 +174,97 @@ Visualization Manager:
       Update Interval: 0
       Value: true
       Visual Enabled: true
+    - Class: rviz/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+        base_footprint:
+          Value: true
+        base_link:
+          Value: true
+        camera_link:
+          Value: true
+        camera_link_optical:
+          Value: true
+        chassis:
+          Value: true
+        fork_assembly:
+          Value: true
+        fork_backstop:
+          Value: true
+        front_axle_left:
+          Value: true
+        front_axle_right:
+          Value: true
+        gps_link:
+          Value: true
+        imu_link:
+          Value: true
+        left_arm:
+          Value: true
+        left_fork:
+          Value: true
+        left_front_wheel:
+          Value: true
+        left_rear_wheel:
+          Value: true
+        rear_axle:
+          Value: true
+        right_arm:
+          Value: true
+        right_fork:
+          Value: true
+        right_front_wheel:
+          Value: true
+        right_rear_wheel:
+          Value: true
+        ultrasonic_link:
+          Value: true
+        ultrasonic_speakers_link:
+          Value: true
+      Marker Scale: 0.100000001
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        base_footprint:
+          base_link:
+            camera_link:
+              camera_link_optical:
+                {}
+            chassis:
+              front_axle_left:
+                left_front_wheel:
+                  {}
+              front_axle_right:
+                right_front_wheel:
+                  {}
+              left_arm:
+                fork_assembly:
+                  fork_backstop:
+                    {}
+                  left_fork:
+                    {}
+                  right_fork:
+                    {}
+              rear_axle:
+                left_rear_wheel:
+                  {}
+                right_rear_wheel:
+                  {}
+              right_arm:
+                {}
+            gps_link:
+              {}
+            imu_link:
+              {}
+            ultrasonic_link:
+              ultrasonic_speakers_link:
+                {}
+      Update Interval: 0
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
