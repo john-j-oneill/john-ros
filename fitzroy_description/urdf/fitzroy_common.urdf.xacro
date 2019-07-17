@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fitzroy_common">
+	<!-- roslaunch urdf_tutorial xacrodisplay.launch model:='$(find fitzroy_description)/urdf/tractorcustom.urdf.xacro' gui:='true'-->
+
+	<!-- Each link is a physical element, the visual tag is required -->
+	<!-- Each link also has a collision and inertial element which define interactions -->
+	<xacro:property name="pi" value="3.14159265358" />
+
+	<!-- default initializer for inertia -->
+	<xacro:macro name="default_inertial" params="mass">
+		<inertial>
+      			<mass value="${mass}" />
+		        <inertia ixx="1.0" ixy="0.0" ixz="0.0"
+			         iyy="1.0" iyz="0.0"
+			         izz="1.0" />
+		</inertial>
+	</xacro:macro>
+
+	<!-- macro for computing the inertia tensor for cubes-->
+	<!-- https://en.wikipedia.org/wiki/List_of_moments_of_inertia -->
+	<xacro:macro name="cube_inertial"
+               params="dimx dimy dimz mass">
+    <inertial>
+      <mass value="${mass}"/>
+      <inertia ixx="${(1/12)*mass*(dimy*dimy + dimz*dimz)}"
+               ixy="0" ixz="0"
+               iyy="${(1/12)*mass*(dimx*dimx + dimz*dimz)}"
+               iyz="0"
+               izz="${(1/12)*mass*(dimx*dimx + dimy*dimy)}"/>
+    </inertial>
+  </xacro:macro>
+
+	<!-- macro for computing inertia tensor for a cylinder-->
+	<!-- http://scienceworld.wolfram.com/physics/MomentofInertiaCylinder.html -->
+	<xacro:macro name="cylinder_inertial"
+               params="rad height mass">
+    <inertial>
+      <mass value="${mass}"/>
+      <inertia ixx="${(1/12)*mass*(height*height) + (1 / 4)*mass*(rad*rad) }"
+               ixy="0" ixz="0"
+               iyy="${(1/12)*mass*(height*height) + (1 / 4)*mass*(rad*rad) }"
+               iyz="0"
+               izz="${(1/2)* mass * (rad*rad)}"/>
+    </inertial>
+  </xacro:macro>
+
+
+	<!-- Setup some colors -->
+	<!-- List of materials: http://wiki.ros.org/simulator_gazebo/Tutorials/ListOfMaterials-->
+	<material name="blue">
+		<color rgba="0 0 0.8 1"/>
+	</material>
+	<material name="red">
+		<color rgba="0.8 0 0 1"/>
+	</material>
+	<material name="hideaxle">
+		<color rgba="1 1 1 1"/>
+	</material>
+	<material name="white">
+		<color rgba="1 1 1 1"/>
+	</material>
+	<material name="black">
+		<color rgba="0 0 0 1"/>
+	</material>
+	<material name="grey">
+		<color rgba="0.3 0.3 0.3 1"/>
+	</material>
+	<material name="green">
+		<color rgba="0 0.6 0 1"/>
+	</material>
+
+	<!-- macro for creating an aluminum cube -->
+	<xacro:macro name="cube_aluminum"
+               params="name dimx dimy dimz density:=2700">
+    <xacro:property name="mass" value="${density*dimx*dimy*dimz}"/>
+    <link name="${name}">
+      <visual>
+        <geometry>
+          <box size="${dimx} ${dimy} ${dimz}"/>
+        </geometry>
+			  <origin rpy="0 0 0" xyz="0 0 0"/>
+			  <material name="grey"/>
+      </visual>
+		  <collision>
+        <geometry>
+          <box size="${dimx} ${dimy} ${dimz}"/>
+        </geometry>
+			  <origin rpy="0 0 0" xyz="0 0 0"/>
+		  </collision>
+      <cube_inertial dimx="${dimx}" dimy="${dimy}" dimz="${dimz}" mass="${mass}" />
+    </link>
+	  <gazebo reference="${name}">
+		  <material>Gazebo/Grey</material>
+	  </gazebo>
+  </xacro:macro>
+
+
+</robot>
+
+
+

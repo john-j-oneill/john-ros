@@ -55,7 +55,7 @@ Visualization Manager:
       Value: true
     - Alpha: 1
       Class: rviz/RobotModel
-      Collision Enabled: true
+      Collision Enabled: false
       Enabled: true
       Links:
         All Links Enabled: true
@@ -67,12 +67,10 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
         base_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
         camera_link:
           Alpha: 1
           Show Axes: false
@@ -107,11 +105,6 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        hokuyo_link_front:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         imu_link:
           Alpha: 1
           Show Axes: false
@@ -132,17 +125,7 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        main_scan_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         radar_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        range_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -163,6 +146,16 @@ Visualization Manager:
           Show Trail: false
           Value: true
         right_rear_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ultrasonic_sensor_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ultrasonic_sensor_speakers_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false

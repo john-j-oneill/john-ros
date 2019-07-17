@@ -2,9 +2,8 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fitzroy">
 	<!-- roslaunch urdf_tutorial xacrodisplay.launch model:='$(find fitzroy_description)/urdf/tractorcustom.urdf.xacro' gui:='true'-->
 
-	<!-- Each link is a physical element, the visual tag is required -->
-	<!-- Each link also has a collision and inertial element which define interactions -->
-	<xacro:property name="pi" value="3.14159265358" />
+  <xacro:include filename="$(find fitzroy_description)/urdf/fitzroy_common.urdf.xacro"/>
+
 
   <!-- The fake GPS needs an origin, it's an arg so it can be changed based on the world used. -->
   <!-- This is the origin of the gazebo world, NOT the place the robot is first dropped into. -->
@@ -75,71 +74,6 @@
   <xacro:property name="gps_y" value="-0.02"/>
   <xacro:property name="ranger_size" value="0.01"/>
 
-
-
-	<!-- default initializer for inertia -->
-	<xacro:macro name="default_inertial" params="mass">
-		<inertial>
-      			<mass value="${mass}" />
-		        <inertia ixx="1.0" ixy="0.0" ixz="0.0"
-			         iyy="1.0" iyz="0.0"
-			         izz="1.0" />
-		</inertial>
-	</xacro:macro>
-
-	<!-- macro for computing the inertia tensor for cubes-->
-	<!-- https://en.wikipedia.org/wiki/List_of_moments_of_inertia -->
-	<xacro:macro name="cube_inertial"
-               params="dimx dimy dimz mass">
-    <inertial>
-      <mass value="${mass}"/>
-      <inertia ixx="${(1/12)*mass*(dimy*dimy + dimz*dimz)}"
-               ixy="0" ixz="0"
-               iyy="${(1/12)*mass*(dimx*dimx + dimz*dimz)}"
-               iyz="0"
-               izz="${(1/12)*mass*(dimx*dimx + dimy*dimy)}"/>
-    </inertial>
-  </xacro:macro>
-
-	<!-- macro for computing inertia tensor for a cylinder-->
-	<!-- http://scienceworld.wolfram.com/physics/MomentofInertiaCylinder.html -->
-	<xacro:macro name="cylinder_inertial"
-               params="rad height mass">
-    <inertial>
-      <mass value="${mass}"/>
-      <inertia ixx="${(1/12)*mass*(height*height) + (1 / 4)*mass*(rad*rad) }"
-               ixy="0" ixz="0"
-               iyy="${(1/12)*mass*(height*height) + (1 / 4)*mass*(rad*rad) }"
-               iyz="0"
-               izz="${(1/2)* mass * (rad*rad)}"/>
-    </inertial>
-  </xacro:macro>
-
-
-	<!-- Setup some colors -->
-	<!-- List of materials: http://wiki.ros.org/simulator_gazebo/Tutorials/ListOfMaterials-->
-	<material name="blue">
-		<color rgba="0 0 0.8 1"/>
-	</material>
-	<material name="red">
-		<color rgba="0.8 0 0 1"/>
-	</material>
-	<material name="hideaxle">
-		<color rgba="1 1 1 1"/>
-	</material>
-	<material name="white">
-		<color rgba="1 1 1 1"/>
-	</material>
-	<material name="black">
-		<color rgba="0 0 0 1"/>
-	</material>
-	<material name="grey">
-		<color rgba="0.3 0.3 0.3 1"/>
-	</material>
-	<material name="green">
-		<color rgba="0 0.6 0 1"/>
-	</material>
-
 	<!-- base footprint to make everything work better -->
   <link name="base_footprint">
   </link>
@@ -180,24 +114,11 @@
   </joint>
 
 	<!-- rear axle -->
-  <link name="rear_axle">
-    <visual>
-      <geometry>
-        <box size="${axlesize} ${rearwheelsep-rearwheelwidth} ${axlesize}"/>
-      </geometry>
-			<origin rpy="0 0 0" xyz="0 0 0"/>
-			<material name="hideaxle"/>
-    </visual>
-		<collision>
-			<geometry>
-				<box size="${axlesize} ${rearwheelsep-rearwheelwidth} ${axlesize}"/>
-			</geometry>
-		</collision>
-		<xacro:default_inertial mass="10"/>
-  </link>
-	<gazebo reference="rear_axle">
-		<material>Gazebo/White</material>
-	</gazebo>
+	<xacro:cube_aluminum
+      name="rear_axle" 
+      dimx="${axlesize}" 
+      dimy="${rearwheelsep-rearwheelwidth}"
+      dimz="${axlesize}" />
 	<joint name="base_link_to_rear_axle" type="fixed">
     <parent link="chassis"/>
     <child link="rear_axle"/>
@@ -819,6 +740,12 @@
   <picam parent="base_link" name="camera">
     <origin xyz="${-(wheelbase/2 + rackback)} 0 ${rackheight}" rpy="0 0 0"/>
   </picam>
+
+	<!-- Ultrasonic -->
+  <xacro:include filename="$(find fitzroy_description)/urdf/ultrasonic_sensor.urdf.xacro"/>
+  <ultrasonic_sensor parent="base_link" name="ultrasonic">
+    <origin xyz="${-(wheelbase/2 + rackback)} 0.020 ${rackheight}" rpy="0 0 0"/>
+  </ultrasonic_sensor>
 
 </robot>
 
