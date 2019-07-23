@@ -7,9 +7,9 @@
 #include <cv_bridge/cv_bridge.h>
 
 #include <image_geometry/pinhole_camera_model.h>
-#include <tf/transform_listener.h>
-#include <boost/foreach.hpp>
+#include <tf/transform_broadcaster.h>
 #include <sensor_msgs/image_encodings.h>
+#include <geometry_msgs/PoseArray.h>
 
 /// Zbar Barcode Library
 #include <zbar.h>
@@ -21,15 +21,17 @@ class BarCodeFinder
   image_transport::ImageTransport it_;
   image_transport::CameraSubscriber sub_;
   image_transport::Publisher pub_;
-  tf::TransformListener tf_listener_;
+  tf::TransformBroadcaster tf_broadcaster_;
   image_geometry::PinholeCameraModel cam_model_;
-  ros::Publisher pub_point_out_;
+  ros::Publisher pub_points_out_;
+  ros::Publisher pub_trans_out_;
   /// ZBar Stuff
   zbar::ImageScanner scanner_;
   std::string codeqr_;
   /// Params
   bool display_image_;
   bool publish_image_;
+  bool publish_tf_;
   bool debug_;
   bool qr_text_in_frameid_;
   std::map<std::string,float> qr_real_width_map_;
@@ -41,12 +43,14 @@ public:
     std::string image_topic = nh_.resolveName("image");
     sub_ = it_.subscribeCamera(image_topic, 1, &BarCodeFinder::imageCb, this);
     pub_ = it_.advertise("image_out", 1);
-    pub_point_out_ = nh_.advertise<geometry_msgs::PoseStamped>("qrcode", 1);;
+    pub_points_out_ = nh_.advertise<geometry_msgs::PoseArray>("qrcodes", 1);
+    pub_trans_out_ = nh_.advertise<geometry_msgs::TransformStamped>("qrcode_trans", 10);
 
     /// Private node handle for params.
     ros::NodeHandle pnh("~");
     pnh.getParam("display_image", display_image_);
     pnh.getParam("publish_image", publish_image_);
+    pnh.getParam("publish_tf", publish_tf_);
     pnh.getParam("debug", debug_);
     pnh.getParam("qr_real_width_map", qr_real_width_map_);
     pnh.getParam("qr_text_in_frameid", qr_text_in_frameid_);
@@ -110,6 +114,27 @@ public:
       return trans;
   }
 
+  geometry_msgs::Transform make_tf_msg(tf::Transform trans)
+  {
+      geometry_msgs::Transform tf_msg;
+
+      tf_msg.translation.x = trans.getOrigin().getX();
+      tf_msg.translation.y = trans.getOrigin().getY();
+      tf_msg.translation.z = trans.getOrigin().getZ();
+
+      tf_msg.rotation.x = trans.getRotation().getX();
+      tf_msg.rotation.y = trans.getRotation().getY();
+      tf_msg.rotation.z = trans.getRotation().getZ();
+      tf_msg.rotation.w = trans.getRotation().getW();
+
+      return tf_msg;
+  }
+
+  geometry_msgs::Transform make_tf_msg(cv::Mat transmat, cv::Mat rotmat)
+  {
+      return make_tf_msg(make_tf(transmat,rotmat));
+  }
+
   geometry_msgs::Pose make_pose(tf::Transform trans)
   {
       geometry_msgs::Pose pose;
@@ -169,6 +194,10 @@ public:
     // scan the image for barcodes
     int n = scanner_.scan(zimage);
     int symbols = 0;
+
+    geometry_msgs::PoseArray pose_msg;
+    pose_msg.header = image_msg->header;
+
     for(zbar::Image::SymbolIterator symbol = zimage.symbol_begin();  symbol != zimage.symbol_end();  ++symbol) {
         symbols++;
 
@@ -214,22 +243,14 @@ public:
             /// \todo Publish TF's or at least geometry_msgs::Transforms
             //tf::Transform trans = make_tf(translationVector,rotationActuallyMatrix);
 
-            /// \todo change to pose array message for viz, and transforms for other stuff
-            /// \todo Could get fancypants and use visualization_msgs to actually put text in 3d...
-            /// Publish the x,y,z and yaw of the QR code in the optical frame
-            geometry_msgs::PoseStamped msg;
-            if(qr_text_in_frameid_)
-            {
-                /// This is totally incorrect and will break RViz. But it could be useful for parsing position and text with one message.
-                msg.header.frame_id=symbol->get_data();
-            }else{
-                /// This is correct, but now we don't have anywhere to store the QR text.
-                msg.header.frame_id=image_msg->header.frame_id;
-            }
-            /// Copy the timestamp, since this location was valid at the time the picture was taken.
-            msg.header.stamp=image_msg->header.stamp;
-            msg.pose = make_pose(translationVector,rotationActuallyMatrix);
-            pub_point_out_.publish(msg);
+            geometry_msgs::TransformStamped tf_msg;
+            tf_msg.header = image_msg->header;
+            tf_msg.child_frame_id = symbol->get_data();
+            tf_msg.transform = make_tf_msg(translationVector,rotationActuallyMatrix);
+            pub_trans_out_.publish(tf_msg);
+            tf_broadcaster_.sendTransform(tf_msg);
+
+            pose_msg.poses.push_back(make_pose(translationVector,rotationActuallyMatrix));
 
             /// Only bother drawing on the image if someone is going to see it
             if(display_image_ || publish_image_){
@@ -244,6 +265,7 @@ public:
                 std::cout << "Failed to match symbol to map. qr_real_width = " << qr_real_width << "\t size = " << size << std::endl;
         }
     }
+    pub_points_out_.publish(pose_msg);
 
     if(display_image_){
         /// For debugging mostly, try to use the published image instead for long-term use.
