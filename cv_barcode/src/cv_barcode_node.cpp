@@ -169,7 +169,7 @@ public:
         image = input_bridge->image;
     }
     catch (cv_bridge::Exception& ex){
-        ROS_ERROR("[cv_barcode_it] Failed to convert image");
+        ROS_ERROR("[cv_barcode_node] Failed to convert image");
         return;
     }
 
@@ -186,8 +186,6 @@ public:
     /// Copy the image data pointer to ZBar
     int width = image_gray.cols;
     int height = image_gray.rows;
-    double centerx = double(width) / 2.0;
-    double centery = double(height) / 2.0;
     uchar *raw = (uchar *)image_gray.data;
     // wrap image data
     zbar::Image zimage(width, height, "Y800", raw, width * height);
@@ -221,7 +219,6 @@ public:
             cv::Mat_<double> translationVector(3, 1);
 
 
-            //ROS_WARN("ROWS=%d,COLS=%d",rows,cols);
             std::vector<cv::Point3d> objectVerticesInObjectCoordinates;
             /// No idea what the proper order of these should be. It changes the "inherent" orientation of the QR.
             objectVerticesInObjectCoordinates.push_back(cv::Point3d(0.f, qr_real_half_width,-qr_real_half_width));
@@ -240,16 +237,21 @@ public:
             cv::solvePnP(objectVerticesInObjectCoordinates, cv::Mat(imagePoints), cam_model_.fullIntrinsicMatrix(), cam_model_.distortionCoeffs(), rotationVector, translationVector);
             cv::Rodrigues(rotationVector,rotationActuallyMatrix);
 
-            /// \todo Publish TF's or at least geometry_msgs::Transforms
-            //tf::Transform trans = make_tf(translationVector,rotationActuallyMatrix);
-
+            /// Publish the pose and tag text as a transform message
             geometry_msgs::TransformStamped tf_msg;
             tf_msg.header = image_msg->header;
+            /// This seems like as good a place as any to put the text?
             tf_msg.child_frame_id = symbol->get_data();
             tf_msg.transform = make_tf_msg(translationVector,rotationActuallyMatrix);
             pub_trans_out_.publish(tf_msg);
-            tf_broadcaster_.sendTransform(tf_msg);
 
+            if(publish_tf_){
+                /// Also publish tfs? This is probably silly, since we only see TF's occasionally.
+                /// \warning the child_frame_id could have wacky characters, be super long, be a URL, or otherwise break your TF. Use this sparingly.
+                tf_broadcaster_.sendTransform(tf_msg);
+            }
+
+            /// Add the pose to a list of poses, this is mostly just for RViz.
             pose_msg.poses.push_back(make_pose(translationVector,rotationActuallyMatrix));
 
             /// Only bother drawing on the image if someone is going to see it
@@ -269,7 +271,7 @@ public:
 
     if(display_image_){
         /// For debugging mostly, try to use the published image instead for long-term use.
-        cv::imshow("cv_barcode_it", image);
+        cv::imshow("cv_barcode_node", image);
         cv::waitKey(1);
     }
     if(publish_image_){
@@ -287,7 +289,7 @@ public:
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "cv_barcode_it");
+  ros::init(argc, argv, "cv_barcode_node");
   BarCodeFinder finder;
   ros::spin();
 }
