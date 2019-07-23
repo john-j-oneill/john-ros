@@ -135,7 +135,6 @@ include_directories(
 
 ## Declare a C++ executable
 add_executable(cv_barcode_node src/cv_barcode_node.cpp)
-add_executable(ronny_qrdocking src/ronny_qrdocking.cpp)
 
 
 ## Add cmake target dependencies of the executable
@@ -147,8 +146,6 @@ target_link_libraries(cv_barcode_node
   ${catkin_LIBRARIES}
   zbar
 )
-target_link_libraries(ronny_qrdocking ${catkin_LIBRARIES} zbar)
-
 #############
 ## Install ##
 #############

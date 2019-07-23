@@ -1,280 +1,271 @@
-/// ROS
 #include <ros/ros.h>
-
-/// Messages
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <geometry_msgs/TransformStamped.h>
-#include <nav_msgs/Path.h>
-#include <message_filters/subscriber.h>
-#include <message_filters/time_synchronizer.h>
+#include <image_transport/image_transport.h>
 
 /// OpenCV
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <cv_bridge/cv_bridge.h>
 
+#include <image_geometry/pinhole_camera_model.h>
+#include <tf/transform_listener.h>
+#include <boost/foreach.hpp>
+#include <sensor_msgs/image_encodings.h>
+
 /// Zbar Barcode Library
-#include <zbar.h>  
+#include <zbar.h>
 
 
-/// Boost time, for tic() toc()
-#include "boost/date_time/posix_time/posix_time.hpp" ///!< include all types plus i/o
-
-/// Silly little timing functions, to get real CPU time, not ROS time
-boost::posix_time::ptime start_tic_toc[10];
-inline void tic(int i=0){start_tic_toc[i]=boost::posix_time::microsec_clock::universal_time();}
-inline double toc(int i=0){return ((double)(boost::posix_time::microsec_clock::universal_time()-start_tic_toc[i]).total_microseconds())/1000000.0;}
-
-/// ZBar Stuff
-zbar::ImageScanner scanner;  
-std::string codeqr;
-
-/// CV Frames
-cv::Mat frame, cropped, img, imgout;
-
-/// ROS Node Variables
-ros::NodeHandle *nh;
-ros::Publisher pub_point_out;
-ros::Publisher pub_img_out;
-
-/// Change this to display a pretty picture
-bool display_image=true;
-bool publish_image=false;
-bool publish_both_sides=false;
-bool qr_text_in_frameid=false;
-float Fx=554.254691191187;
-float qr_real_width=0.168;//!< m
-bool debug = false;/// Print debug info to std::cout
-
-void imageCallback(const sensor_msgs::Image::ConstPtr& image_msg)
+class BarCodeFinder
 {
-    tic();
+  ros::NodeHandle nh_;
+  image_transport::ImageTransport it_;
+  image_transport::CameraSubscriber sub_;
+  image_transport::Publisher pub_;
+  tf::TransformListener tf_listener_;
+  image_geometry::PinholeCameraModel cam_model_;
+  ros::Publisher pub_point_out_;
+  /// ZBar Stuff
+  zbar::ImageScanner scanner_;
+  std::string codeqr_;
+  /// Params
+  bool display_image_;
+  bool publish_image_;
+  bool debug_;
+  bool qr_text_in_frameid_;
+  std::map<std::string,float> qr_real_width_map_;
 
-    /// Convert from a ROS message to an OpenCV Mat
-    cv_bridge::CvImagePtr cv_ptr_rgb;
-    try
-    {
-        cv_ptr_rgb = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::BGR8);
+public:
+  BarCodeFinder(void)
+    : it_(nh_)
+  {
+    std::string image_topic = nh_.resolveName("image");
+    sub_ = it_.subscribeCamera(image_topic, 1, &BarCodeFinder::imageCb, this);
+    pub_ = it_.advertise("image_out", 1);
+    pub_point_out_ = nh_.advertise<geometry_msgs::PoseStamped>("qrcode", 1);;
+
+    /// Private node handle for params.
+    ros::NodeHandle pnh("~");
+    pnh.getParam("display_image", display_image_);
+    pnh.getParam("publish_image", publish_image_);
+    pnh.getParam("debug", debug_);
+    pnh.getParam("qr_real_width_map", qr_real_width_map_);
+    pnh.getParam("qr_text_in_frameid", qr_text_in_frameid_);
+
+    scanner_.set_config(zbar::ZBAR_NONE, zbar::ZBAR_CFG_ENABLE, 0);
+    scanner_.set_config(zbar::ZBAR_QRCODE, zbar::ZBAR_CFG_ENABLE, 1);
+  }
+
+  /*!
+   * \brief get_qr_size
+   *
+   * Gets a size from the parameter map based on the first characters of the QR code.
+   * The idea is that if you want multiple sized landmarks, you might name them
+   * Landmark-Large-01 Landmark-Large-02 Landmark-Small-01 Landmark-Small-02 and so on.
+   * Then, your dictionary would say text that starts with "Landmark-Large-" are 10cm, and
+   * text that starts with "Landmark-Small-" are 3cm, and this function would then get the
+   * correct real world size.
+   *
+   * \param qr_text Text encoded in the QR code.
+   * \return Size of the QR code. -1 if not in dictionary.
+   */
+  float get_qr_size(std::string qr_text)
+  {
+      for (std::map<std::string,float>::iterator it=qr_real_width_map_.begin(); it!=qr_real_width_map_.end(); ++it)
+      {
+          if(qr_text.substr(0,it->first.size())==it->first)
+          {
+              if(debug_)
+                  std::cout << "MATCH: qr=#" << qr_text.substr(0,it->first.size()) << "#  map=#" << it->first << "#" << std::endl;
+              return it->second;
+          }else{
+              if(debug_)
+                  std::cout << "       qr=#" << qr_text.substr(0,it->first.size()) << "#  map=#" << it->first << "#" << std::endl;
+          }
+      }
+      return -1.f;
+  }
+
+  tf::Transform make_tf(cv::Mat transmat, cv::Mat rotmat){
+
+      //get geometry_msgs/Tranasform from 4x4 transformation matrix
+      tf::Vector3 msgorigin( transmat.at<double>(0,0), transmat.at<double>(0,1), transmat.at<double>(0,2) );
+      //tfScalar angle = sqrt(rotmat.at<double>(0,0)*rotmat.at<double>(0,0)+rotmat.at<double>(0,1)*rotmat.at<double>(0,1)+rotmat.at<double>(0,2)*rotmat.at<double>(0,2));
+      //tf::Vector3 axis(rotmat.at<double>(0,0)/angle,rotmat.at<double>(0,1)/angle,rotmat.at<double>(0,2)/angle);
+      //tf::Quaternion myQuat(axis,angle);
+      tf::Matrix3x3 myMat;
+      myMat.setValue(rotmat.at<double>(0,0),
+                     rotmat.at<double>(0,1),
+                     rotmat.at<double>(0,2),
+                     rotmat.at<double>(1,0),
+                     rotmat.at<double>(1,1),
+                     rotmat.at<double>(1,2),
+                     rotmat.at<double>(2,0),
+                     rotmat.at<double>(2,1),
+                     rotmat.at<double>(2,2));
+      tf::Quaternion myQuat;
+      myMat.getRotation(myQuat);
+
+      tf::Transform trans(myQuat,msgorigin);
+
+      return trans;
+  }
+
+  geometry_msgs::Pose make_pose(tf::Transform trans)
+  {
+      geometry_msgs::Pose pose;
+
+      pose.position.x = trans.getOrigin().getX();
+      pose.position.y = trans.getOrigin().getY();
+      pose.position.z = trans.getOrigin().getZ();
+
+      pose.orientation.x = trans.getRotation().getX();
+      pose.orientation.y = trans.getRotation().getY();
+      pose.orientation.z = trans.getRotation().getZ();
+      pose.orientation.w = trans.getRotation().getW();
+
+      return pose;
+  }
+
+
+  geometry_msgs::Pose make_pose(cv::Mat transmat, cv::Mat rotmat)
+  {
+      return make_pose(make_tf(transmat,rotmat));
+  }
+
+  void imageCb(const sensor_msgs::ImageConstPtr& image_msg,
+               const sensor_msgs::CameraInfoConstPtr& info_msg)
+  {
+    /// Convert from sensor msgs type to opencv.
+    /// \todo Test converting directly to MONO8 here, maybe save some time?
+    cv::Mat image,image_gray;
+    cv_bridge::CvImagePtr input_bridge;
+    try {
+        input_bridge = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::BGR8);
+        image = input_bridge->image;
     }
-    catch (cv_bridge::Exception& e)
-    {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
+    catch (cv_bridge::Exception& ex){
+        ROS_ERROR("[cv_barcode_it] Failed to convert image");
         return;
     }
 
+    /// Get the camera model
+    cam_model_.fromCameraInfo(info_msg);
+
     /// Convert to gray since QR codes are black and white
-    cv::cvtColor(cv_ptr_rgb->image,img,CV_BGR2GRAY);
+    cv::cvtColor(image,image_gray,CV_BGR2GRAY);
     /// If we are displaying or publishing the image for debug purposes, make a copy to draw onto
-    if(display_image || publish_image){
-        cv::cvtColor(img,imgout,CV_GRAY2RGB);  
+    if(display_image_ || publish_image_){
+        cv::cvtColor(image_gray,image,CV_GRAY2RGB);
     }
 
     /// Copy the image data pointer to ZBar
-    int width = img.cols;  
-    int height = img.rows;  
-    uchar *raw = (uchar *)img.data;  
-    // wrap image data  
-    zbar::Image image(width, height, "Y800", raw, width * height);  
-    // scan the image for barcodes  
-    int n = scanner.scan(image);
+    int width = image_gray.cols;
+    int height = image_gray.rows;
+    double centerx = double(width) / 2.0;
+    double centery = double(height) / 2.0;
+    uchar *raw = (uchar *)image_gray.data;
+    // wrap image data
+    zbar::Image zimage(width, height, "Y800", raw, width * height);
+    // scan the image for barcodes
+    int n = scanner_.scan(zimage);
     int symbols = 0;
-    for(zbar::Image::SymbolIterator symbol = image.symbol_begin();  symbol != image.symbol_end();  ++symbol) {
+    for(zbar::Image::SymbolIterator symbol = zimage.symbol_begin();  symbol != zimage.symbol_end();  ++symbol) {
         symbols++;
 
         /// Display the QR Code's text
-        if(debug)
-            std::cout << symbol->get_data();
+        if(debug_)
+            std::cout << symbol->get_data() << std::endl;
 
-        /// Find the average x,y and line length.
-        /// Average x and y represent the middle of the QR Code (mostly)
-        /// Average line length gives us a way to estimate distance, since
-        /// we know how long that line is in the real world.
-        /// Average is probably bad, since it won't deal with skew very well.
-        /// Maybe max would be better? I dunno.
-        float avg_dist_px=0.0;
-        float avg_x_px=0.0;
-        float avg_y_px=0.0;
         int size=symbol->get_location_size();
-        for(int i=0;i< size;i++)
+        double qr_real_width = get_qr_size(symbol->get_data());
+        double qr_real_half_width = qr_real_width/2.0;
+
+        /// Only continue for nonzero sizes. This means if the prefix was not in our dictionary we ignore it.
+        /// This could provide some safety, in case you pass a random barcode.
+        /// \todo Could just provide a unit vector towards the qrcode if we do not know the size.
+        if(qr_real_width>0.f && size==4)
         {
-            float dx=symbol->get_location_x(i)-symbol->get_location_x( (i+1)%size );
-            float dy=symbol->get_location_y(i)-symbol->get_location_y( (i+1)%size );
-            float dist_px=sqrt(dx*dx+dy*dy);
-            avg_dist_px+=dist_px;
-            avg_x_px+=symbol->get_location_x(i);
-            avg_y_px+=symbol->get_location_y(i);
-            
-            if(debug){
-                std::cout << "\t" << dist_px;
-                std::cout << "\t" << symbol->get_location_x(i);
-                std::cout << "\t" << symbol->get_location_y(i);
-            }
-        }
-        avg_dist_px/=size;
-        avg_x_px/=size;
-        avg_y_px/=size;
-        if(debug){
-            std::cout << "\t" << avg_dist_px;
-            std::cout << "\t" << avg_x_px;
-            std::cout << "\t" << avg_y_px;
-        }
-        
-        float left_dist_px;
-        float right_dist_px;
-        float left_bear_px;
-        float right_bear_px;
-        for(int i=0;i< size;i++)
-        {
-            if(symbol->get_location_x(i) < avg_x_px && symbol->get_location_x( (i+1)%size ) < avg_x_px)
+
+            //Make buffers to get 3x1 rotation vector and 3x1 translation vector
+            cv::Mat_<double> rotationVector(3, 1);
+            cv::Mat_<double> rotationActuallyMatrix(3, 3);
+            cv::Mat_<double> translationVector(3, 1);
+
+
+            //ROS_WARN("ROWS=%d,COLS=%d",rows,cols);
+            std::vector<cv::Point3d> objectVerticesInObjectCoordinates;
+            /// No idea what the proper order of these should be. It changes the "inherent" orientation of the QR.
+            objectVerticesInObjectCoordinates.push_back(cv::Point3d(0.f, qr_real_half_width,-qr_real_half_width));
+            objectVerticesInObjectCoordinates.push_back(cv::Point3d(0.f, qr_real_half_width, qr_real_half_width));
+            objectVerticesInObjectCoordinates.push_back(cv::Point3d(0.f,-qr_real_half_width, qr_real_half_width));
+            objectVerticesInObjectCoordinates.push_back(cv::Point3d(0.f,-qr_real_half_width,-qr_real_half_width));
+            std::vector<cv::Point2d> imagePoints;
+            imagePoints.resize(size);
+            for(int i=0;i< size;i++)
             {
-                float dx=symbol->get_location_x(i)-symbol->get_location_x( (i+1)%size );
-                float dy=symbol->get_location_y(i)-symbol->get_location_y( (i+1)%size );
-                left_dist_px=sqrt(dx*dx+dy*dy);
-                left_bear_px=(symbol->get_location_x(i)+symbol->get_location_x( (i+1)%size ))/2.0;
+                imagePoints[i] = cv::Point2d(double(symbol->get_location_x( (i+1)%size )),
+                                             double(symbol->get_location_y( (i+1)%size )));
             }
-            if(symbol->get_location_x(i) > avg_x_px && symbol->get_location_x( (i+1)%size ) > avg_x_px)
+
+            /// Use solvePnP to get the rotation and translation vector of the QR code relative to the camera
+            cv::solvePnP(objectVerticesInObjectCoordinates, cv::Mat(imagePoints), cam_model_.fullIntrinsicMatrix(), cam_model_.distortionCoeffs(), rotationVector, translationVector);
+            cv::Rodrigues(rotationVector,rotationActuallyMatrix);
+
+            /// \todo Publish TF's or at least geometry_msgs::Transforms
+            //tf::Transform trans = make_tf(translationVector,rotationActuallyMatrix);
+
+            /// \todo change to pose array message for viz, and transforms for other stuff
+            /// \todo Could get fancypants and use visualization_msgs to actually put text in 3d...
+            /// Publish the x,y,z and yaw of the QR code in the optical frame
+            geometry_msgs::PoseStamped msg;
+            if(qr_text_in_frameid_)
             {
-                float dx=symbol->get_location_x(i)-symbol->get_location_x( (i+1)%size );
-                float dy=symbol->get_location_y(i)-symbol->get_location_y( (i+1)%size );
-                right_dist_px=sqrt(dx*dx+dy*dy);
-                right_bear_px=(symbol->get_location_x(i)+symbol->get_location_x( (i+1)%size ))/2.0;
+                /// This is totally incorrect and will break RViz. But it could be useful for parsing position and text with one message.
+                msg.header.frame_id=symbol->get_data();
+            }else{
+                /// This is correct, but now we don't have anywhere to store the QR text.
+                msg.header.frame_id=image_msg->header.frame_id;
             }
-        }
-        /// We are assuming a pinhole camera model, with even pixels. 
-        /// THIS IS DEFINITELY WRONG!!!!  ESPECIALLY NEAR THE EDGES!!!
-        //float fov=39.0;//!< Degrees
-        //float fov=60.0;//!< Degrees
-        float fov_rad=2 * atan(0.5 * width / Fx);
-        //float fov_rad=fov*M_PI/180.0;
-        float rad_per_px=fov_rad/width;
-        
-        /// Law of cosines:
-        /// c^2 = a^2 + b^2 - 2ab*cos(C)
-        /// c   = qr_real_width
-        /// a/b = qr_real_width/tan(left_dist_px *rad_per_px/2.0)/
-        ///       qr_real_width/tan(right_dist_px*rad_per_px/2.0)
-        /// a/b = tan(right_dist_px*rad_per_px/2.0)/
-        ///       tan(left_dist_px *rad_per_px/2.0)
-        /// a/b = sin(right)/(1+cos(right))/
-        ///       sin(left )/(1+cos(left ))/
-        /// a/b = left_dist_px/right_dist_px   <-- ASSUMES SMALL ANGLE APPROX
-        /// a/b = r
-        /// b   = a/r
-        /// c^2 = a^2 + a^2/r^2 - 2a^2/r*cos(C)
-        /// c^2 = a^2*(1 + 1/r^2 - 2*cos(C)/r)
-        /// a   = sqrt(c^2/(1 + 1/r^2 - 2*cos(C)/r))
-        
-        /// c^2 = b^2*r^2 + b^2 - 2b^2*r*cos(C)
-        /// c^2 = b^2*(1 + r^2 - 2*r*cos(C))
-        /// b   = sqrt(c^2/(1 + r^2 - 2*r*cos(C))
-        
-        
-        float c   = qr_real_width;
-        float r   = std::tan(right_dist_px*rad_per_px/2.0)/
-                    std::tan(left_dist_px *rad_per_px/2.0);
-        float C   = (right_bear_px-left_bear_px)*rad_per_px;
-        float a   = std::sqrt(c*c/(1 + 1.0/r/r - 2/r*std::cos(C)));
-        float b   = std::sqrt(c*c/(1 + r*r     - 2*r*std::cos(C)));
+            /// Copy the timestamp, since this location was valid at the time the picture was taken.
+            msg.header.stamp=image_msg->header.stamp;
+            msg.pose = make_pose(translationVector,rotationActuallyMatrix);
+            pub_point_out_.publish(msg);
 
-        float bearing_r=(right_bear_px-width/2.0)*rad_per_px;
-        float beta= M_PI_2 - bearing_r;
-        float A   = std::asin(a*sin(C)/c);
-        float yaw = A - beta;
-
-        /// Use some trig to calculate distance
-        float distance=qr_real_width/std::tan(avg_dist_px*rad_per_px/2.0)/2.0;//!< m
-        float bearing_x=(avg_x_px-width/2.0)*rad_per_px;
-        float bearing_y=(avg_y_px-height/2.0)*rad_per_px;
-
-        /// Publish the x,y,z and yaw of the QR code in the optical frame
-        geometry_msgs::PoseStamped msg;
-        if(qr_text_in_frameid)
-        {
-            /// This is totally incorrect and will break RViz. But it could be useful for parsing position and text with one message.
-            msg.header.frame_id=symbol->get_data();
+            /// Only bother drawing on the image if someone is going to see it
+            if(display_image_ || publish_image_){
+                /// Trace around the QR Code, to show what we are actually tracking.
+                cv::line(image,imagePoints[0],imagePoints[1],cv::Scalar(255,0,0),3);
+                cv::line(image,imagePoints[1],imagePoints[2],cv::Scalar(0,255,0),3);
+                cv::line(image,imagePoints[2],imagePoints[3],cv::Scalar(0,0,255),3);
+                cv::line(image,imagePoints[3],imagePoints[0],cv::Scalar(255,255,0),3);
+            }
         }else{
-            msg.header.frame_id="base_link";
+            if(debug_)
+                std::cout << "Failed to match symbol to map. qr_real_width = " << qr_real_width << "\t size = " << size << std::endl;
         }
-        msg.header.stamp=ros::Time::now();
-        msg.pose.position.x=std::cos(bearing_y)*std::sin(bearing_x)*distance;
-        msg.pose.position.y=std::sin(bearing_y)*distance;
-        msg.pose.position.z=std::cos(bearing_y)*std::cos(bearing_x)*distance;
-        /// \note this is only using the yaw, since that's all I care about, but the same could be done for pitch and roll if you care about that.
-        msg.pose.orientation.x=0.0;
-        msg.pose.orientation.y=std::sin(yaw/2.f); /// Dunno +/-, but should be rotating about y
-        msg.pose.orientation.z=0.0;
-        msg.pose.orientation.w=std::cos(yaw/2.f);
-        pub_point_out.publish(msg);
-        
-        if(display_image || publish_image){
-            /// Make a nice circle the size of the QR Code (This represents our distance measurement)
-            cv::circle(imgout,cv::Point2f(avg_x_px,avg_y_px),avg_dist_px/2.0,cv::Scalar(255,0,0),3);
-            /// And a little circle in the middle of the QR Code (This represents our bearing measurement) 
-            cv::circle(imgout,cv::Point2f(avg_x_px,avg_y_px),10,cv::Scalar(0,0,255),3); 
-            
-            /// Trace around the QR Code, just to be friendly.
-            cv::line(imgout,cv::Point2f(symbol->get_location_x(0),symbol->get_location_y(0)),
-                            cv::Point2f(symbol->get_location_x(1),symbol->get_location_y(1)),cv::Scalar(255,0,0),3); 
-            cv::line(imgout,cv::Point2f(symbol->get_location_x(1),symbol->get_location_y(1)),
-                            cv::Point2f(symbol->get_location_x(2),symbol->get_location_y(2)),cv::Scalar(0,255,0),3); 
-            cv::line(imgout,cv::Point2f(symbol->get_location_x(2),symbol->get_location_y(2)),
-                            cv::Point2f(symbol->get_location_x(3),symbol->get_location_y(3)),cv::Scalar(0,0,255),3); 
-            cv::line(imgout,cv::Point2f(symbol->get_location_x(3),symbol->get_location_y(3)),
-                            cv::Point2f(symbol->get_location_x(0),symbol->get_location_y(0)),cv::Scalar(255,255,0),3);
-        }
-    }  
-    
-    if(display_image){
-        /// For debugging
-        cv::imshow("barcodes", imgout);
-        cv::waitKey(3);
     }
-    if(publish_image){
+
+    if(display_image_){
+        /// For debugging mostly, try to use the published image instead for long-term use.
+        cv::imshow("cv_barcode_it", image);
+        cv::waitKey(1);
+    }
+    if(publish_image_){
         /// This way you can log it with rosbag or view it in rviz or on another computer over the network if you want.
-        cv_bridge::CvImage out_msg;
-        out_msg.header   = image_msg->header; // Same timestamp and tf frame as input image
-        out_msg.encoding = image_msg->encoding; // Or whatever
-        out_msg.image    = imgout; // Your cv::Mat
-
-        pub_img_out.publish(out_msg.toImageMsg());
+        pub_.publish(input_bridge->toImageMsg());
     }
-    if(debug)
-        std::cout << "Found " << symbols << " symbols in " << toc() << " seconds" << std::endl;
+    if(debug_)
+        std::cout << "Found " << symbols << " symbols" << std::endl;
 
-    // clean up  
-    image.set_data(NULL, 0);
-}
+    // clean up
+    zimage.set_data(NULL, 0);
 
+  }
+};
 
-int
-main (int argc, char** argv)
+int main(int argc, char** argv)
 {
-    
-    scanner.set_config(zbar::ZBAR_NONE, zbar::ZBAR_CFG_ENABLE, 0);
-    scanner.set_config(zbar::ZBAR_QRCODE, zbar::ZBAR_CFG_ENABLE, 1);
-    
-    /// Initialize ROS
-    ros::init (argc, argv, "cv_barcode_node");
-    nh = new ros::NodeHandle("~");
-    nh->getParam("publish_image",publish_image);
-    nh->getParam("display_image",display_image);
-    nh->getParam("publish_both_sides",publish_both_sides);
-    nh->getParam("qr_text_in_frameid",qr_text_in_frameid);
-    nh->getParam("Fx",Fx);
-    nh->getParam("debug",debug);
-
-    // advertise
-    pub_point_out = nh->advertise<geometry_msgs::PoseStamped>("/landmark", 1);
-    pub_img_out = nh->advertise<sensor_msgs::Image>("/rgb/image_barcode", 1);
-
-    // subscribe
-    ros::Subscriber sub = nh->subscribe("/rgb/image_rect", 1, imageCallback);
-
-    // timer
-    //ros::Timer param_timer = nh->createTimer(ros::Duration(1.0), param_timer_callback);
-
-    // Spin
-    ros::spin ();
-
+  ros::init(argc, argv, "cv_barcode_it");
+  BarCodeFinder finder;
+  ros::spin();
 }
