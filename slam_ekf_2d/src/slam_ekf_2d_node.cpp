@@ -8,7 +8,7 @@
 #include "tf/transform_listener.h"
 #include "geometry_msgs/TransformStamped.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
-#include "std_msgs/Int8.h"
+#include "std_msgs/Bool.h"
 #include "math.h"
 #include "limits.h"
 #include <eigen3/Eigen/SVD>
@@ -37,7 +37,7 @@ tf::TransformListener *listener;
 /// ROS params
 float update_thresh         = 1.0;    /// Mahalanobis lower thresh
 float new_feature_thresh    = 10.0;   /// Mahalanobis upper thresh
-int   num_consecutive_errs  = 20;     /// How many times do we have to see something where it doesn't belong before we give up
+int   num_consecutive_errs  = 2;      /// How many times do we have to see something where it doesn't belong before we give up
 
 float ekf_distance_noise    = 0.500;  /// What is the noise in the distance aspect of the sensor, in meters. For VLP 16, +/- 3cm
 float ekf_bearing_noise     = 0.020;  /// What is the noise in the bearing aspect of the sensor, in radians. For VLP 16, +/- 0.4 deg
@@ -103,8 +103,8 @@ void create_ellipse(Eigen::VectorXf xy_vector, Eigen::MatrixXf cov_matrix, senso
     ellipse_msg.header.stamp = ros::Time::now();
     for(int ii = 0; ii< ellipse_range/dTheta; ii++){
         /// Populate the "rotation" vector to get into cartesian
-        e1(0) = cos(ii*dTheta);
-        e1(1) = sin(ii*dTheta);
+        e1(0) = std::cos(ii*dTheta);
+        e1(1) = std::sin(ii*dTheta);
         temp = I.cast<std::complex<float> >() * Evec * Eval.cwiseSqrt() * e1;
         ellipse_vector = xy_vector + temp.real();
         ellipse_pt.x = ellipse_vector(0);
@@ -179,6 +179,20 @@ int get_feature_index(std::string id)
     return feature_index;
 }
 
+void resetSlam()
+{
+
+    /// eliminate all but robot x,y,phi
+    state.resize(ROBOT_SIZE);
+    state[ROBOT_X]=0;
+    state[ROBOT_Y]=0;
+    state[ROBOT_P]=0;
+    covariance.resize(ROBOT_SIZE,ROBOT_SIZE);
+    covariance = Eigen::MatrixXf::Zero(ROBOT_SIZE,ROBOT_SIZE);
+
+    landmark_ids.resize(0);
+}
+
 void initializeSlam(float distance_noise,float bearing_noise,float phi_noise,float propogate_noise)
 {
 
@@ -191,41 +205,21 @@ void initializeSlam(float distance_noise,float bearing_noise,float phi_noise,flo
     R(LANDMARK_Y,LANDMARK_Y) = bearing_noise;  // Bearing noise
     R(LANDMARK_P,LANDMARK_P) = phi_noise;      // Phi noise
 
-    /// State has at least robot x,y,phi
-    state.resize(ROBOT_SIZE);
-    state[ROBOT_X]=0;
-    state[ROBOT_Y]=0;
-    state[ROBOT_P]=0;
-    covariance.resize(ROBOT_SIZE,ROBOT_SIZE);
-    covariance = Eigen::MatrixXf::Zero(ROBOT_SIZE,ROBOT_SIZE);
-
-    landmark_ids.resize(0);
+    /// Set robot pose to 0,0,0
+    resetSlam();
 
 }
 
-void resetSlam()
-{
-
-    /// eliminate all but robot x,y,phi
-    state.resize(ROBOT_SIZE);
-    state[ROBOT_X]=0;
-    state[ROBOT_Y]=0;
-    state[ROBOT_P]=0;
-    covariance.resize(ROBOT_SIZE,ROBOT_SIZE);
-    covariance = Eigen::MatrixXf::Zero(ROBOT_SIZE,ROBOT_SIZE);
-    
-    landmark_ids.resize(0);
-}
 
 Eigen::Matrix2f Get_C(float th)
 {
     Eigen::Matrix2f C;
     
     /// Formulate a rotation matrix from angle
-    C(0,0) =  cos(th);
-    C(0,1) = -sin(th);
-    C(1,0) =  sin(th);
-    C(1,1) =  cos(th);
+    C(0,0) =  std::cos(th);
+    C(0,1) = -std::sin(th);
+    C(1,0) =  std::sin(th);
+    C(1,1) =  std::cos(th);
     
     return C;
 }
@@ -238,13 +232,13 @@ Eigen::MatrixXf Get_R_mapped(geometry_msgs::Point32 pt)
     Eigen::MatrixXf G_update((int)LANDMARK_SIZE,(int)LANDMARK_SIZE);
 
     
-    float feature_th = atan2(pt.y,pt.x);
-    float feature_d = sqrt(pt.x*pt.x+pt.y*pt.y);
+    float feature_th = std::atan2(pt.y,pt.x);
+    float feature_d = std::sqrt(pt.x*pt.x+pt.y*pt.y);
     /// G matrix to map the noise
-    G_update(0,0) = cos(feature_th);
-    G_update(0,1) = -feature_d*sin(feature_th);
-    G_update(1,0) = sin(feature_th);
-    G_update(1,1) = feature_d*cos(feature_th);
+    G_update(0,0) = std::cos(feature_th);
+    G_update(0,1) = -feature_d*std::sin(feature_th);
+    G_update(1,0) = std::sin(feature_th);
+    G_update(1,1) = feature_d*std::cos(feature_th);
     G_update(0,2) = 0.0;
     G_update(1,2) = 0.0;
     G_update(2,2) = 1.0;
@@ -406,9 +400,6 @@ void update_feature(geometry_msgs::Point32 pt, float phi, int feature_index)
     /// Get the angle of the robot state from the state vector
     Eigen::Matrix2f C = Get_C(state[ROBOT_P]);
 
-    /// Check Mahalanobis distance
-    int mahalanobis_feature_index = Mahalanobis_dist(R_mapped,pt,C);  /// Returns a feature_index of the feature in the state vector (-1 means unsure, -2 means new feature)
-
     /// Define the actual measurement in a vector
     Eigen::Vector3f z_m;
     z_m(LANDMARK_X) = pt.x;
@@ -423,33 +414,41 @@ void update_feature(geometry_msgs::Point32 pt, float phi, int feature_index)
     z_hat(LANDMARK_Y) = z_hat_pos(LANDMARK_Y);
     z_hat(LANDMARK_P) = state[feature_index + LANDMARK_P] - state[ROBOT_P];
 
-    /// For now, we can just exit if we aren't sure it's a
-    if(mahalanobis_feature_index == NEW_FEATURE || mahalanobis_feature_index == UNSURE){
-        /// We saw the feature not quite where we expected
-        /// \todo Decide if UNSURE counts as an error for consecutive_err_count or not. If not, we could get stuck not quite seeing it but also not updating.
-        consecutive_err_count++;
-        float bearing_error=(atan2(pt.y,pt.x)-atan2(z_hat(LANDMARK_Y),z_hat(LANDMARK_X)))*180.0/M_PI;
-        float dist_error=sqrt(pow(pt.x-z_hat(LANDMARK_X),2)+pow(pt.y-z_hat(LANDMARK_Y),2));
-        ROS_INFO_COND(!reset_state,"Unexpected observation. Err %f deg, %f m.",bearing_error,dist_error);
+    /// Only bother to check mahalanobis distance if we want to try throwing out outlier updates.
+    /// If num_consecutive_errs<=0 then we would always proceed anyways, so save time by skipping the maths.
+    if(num_consecutive_errs>0)
+    {
 
-        /// Check for lots of errors
-        if(consecutive_err_count > num_consecutive_errs){
-            /// We haven't seen the feature where we thought we would AND we've seen it elsewhere a lot.
-            /// Maybe we ARE seeing the feature, we just have a bad state estimate
-            //ROS_WARN("Repeated unexpected observation. Expected %f,%f but saw %f,%f.",z_hat(LANDMARK_X),z_hat(LANDMARK_Y),pt.x,pt.y);
-            float bearing_error=(atan2(pt.y,pt.x)-atan2(z_hat(LANDMARK_Y),z_hat(LANDMARK_X)))*180.0/M_PI;
-            float dist_error=sqrt(pow(pt.x-z_hat(LANDMARK_X),2)+pow(pt.y-z_hat(LANDMARK_Y),2));
-            ROS_WARN_COND(!reset_state,"Repeated unexpected observation. Err %f deg, %f m.",bearing_error,dist_error);
+        /// Check Mahalanobis distance
+        int mahalanobis_feature_index = Mahalanobis_dist(R_mapped,pt,C);  /// Returns a feature_index of the feature in the state vector (-1 means unsure, -2 means new feature)
 
-            /// \todo We fully Reset the EKF, but we could increase the uncertainty or just remove the feature or something.
-            resetSlam();
+        /// For now, we can just exit if we aren't sure it's a
+        if(mahalanobis_feature_index == NEW_FEATURE || mahalanobis_feature_index == UNSURE){
+            /// We saw the feature not quite where we expected
+            /// \todo Decide if UNSURE counts as an error for consecutive_err_count or not. If not, we could get stuck not quite seeing it but also not updating.
+            consecutive_err_count++;
+            float bearing_error=(std::atan2(pt.y,pt.x)-std::atan2(z_hat(LANDMARK_Y),z_hat(LANDMARK_X)))*180.0/M_PI;
+            float dist_error=std::sqrt(pow(pt.x-z_hat(LANDMARK_X),2)+pow(pt.y-z_hat(LANDMARK_Y),2));
+            ROS_INFO_COND(!reset_state,"Unexpected observation. Err %f deg, %f m.",bearing_error,dist_error);
+
+            /// Check for lots of errors
+            if(consecutive_err_count > num_consecutive_errs){
+                /// We haven't seen the feature where we thought we would AND we've seen it elsewhere a lot.
+                /// Maybe we ARE seeing the feature, we just have a bad state estimate
+                //ROS_WARN("Repeated unexpected observation. Expected %f,%f but saw %f,%f.",z_hat(LANDMARK_X),z_hat(LANDMARK_Y),pt.x,pt.y);
+                float bearing_error=(std::atan2(pt.y,pt.x)-std::atan2(z_hat(LANDMARK_Y),z_hat(LANDMARK_X)))*180.0/M_PI;
+                float dist_error=std::sqrt(pow(pt.x-z_hat(LANDMARK_X),2)+pow(pt.y-z_hat(LANDMARK_Y),2));
+                ROS_WARN_COND(!reset_state,"Repeated unexpected observation. Err %f deg, %f m.",bearing_error,dist_error);
+
+                /// Allow the feature update to go through.
+            }else{
+                /// Don't update the feature, since we aren't sure what we saw anyways. This way we are robust to a few outlier updates.
+                return;
+            }
+        }else{
+            /// We saw the feature
             consecutive_err_count = 0;
         }
-        /// Don't update the feature, since we aren't sure what we saw anyways
-        return;
-    }else{
-        /// We saw the feature
-        consecutive_err_count = 0;
     }
 
     /// Update the covariance
@@ -496,16 +495,30 @@ void update_feature(geometry_msgs::Point32 pt, float phi, int feature_index)
     }
 }
 
+double get_yaw(geometry_msgs::Transform trans)
+{
+    tf::Quaternion q(
+        trans.rotation.x,
+        trans.rotation.y,
+        trans.rotation.z,
+        trans.rotation.w);
+    tf::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    return yaw;
+}
 
 /// Callback function for receiving a point feature
 void featureCallback(const geometry_msgs::TransformStamped::ConstPtr& feature){
+    /// \todo This should be transformed into base_link frame if it is not already. But R_mapped expects distance/bearing measurements, so be careful with that.
 
     /// Get the point from each feature detected
     geometry_msgs::Point32 pt;
 
     pt.x = feature->transform.translation.x;
     pt.y = feature->transform.translation.y;
-    float phi = feature->transform.rotation.z;
+    /// Get the orientation of the feature
+    float phi = get_yaw(feature->transform);
     std::string id = feature->child_frame_id;
 
     /// Check feature in map
@@ -535,6 +548,15 @@ void featureCallback(const geometry_msgs::TransformStamped::ConstPtr& feature){
     }
 }
 
+/*!
+ * \brief featureArrayCallback
+ *
+ * This is a planned future implimentation, where we do a batch update.
+ * This would save processing time, but that may not matter much compared to other nodes anyways.
+ *
+ * \param path A series of landmarks, stuffed into a path message, with landmark ids in pose header frameids. THIS IS BAD!
+ * \todo should change to a custom message that's just an array of TransformStamped msgs.
+ */
 void featureArrayCallback(const nav_msgs::Path::ConstPtr& path)
 {
     /// This is silly, since it just loops through anyways, but it proves that it works.
@@ -544,7 +566,9 @@ void featureArrayCallback(const nav_msgs::Path::ConstPtr& path)
         feature->transform.translation.x=path->poses[ii].pose.position.x;
         feature->transform.translation.y=path->poses[ii].pose.position.y;
         feature->transform.rotation.z=path->poses[ii].pose.position.z;
-        feature->header=path->poses[ii].header;
+        /// This is a bit hacky. Probably should do this differently.
+        feature->header=path->header;
+        feature->child_frame_id=path->poses[ii].header.frame_id;
         featureCallback(feature);
     }
     
@@ -561,10 +585,17 @@ void featureArrayCallback(const nav_msgs::Path::ConstPtr& path)
     }
 }
 
-void resetCallback(const std_msgs::Int8::ConstPtr& reset)
+/*!
+ * \brief reset the ekf
+ *
+ * If the message is true, we reset the EKF as if rebooted.
+ *
+ * \param reset
+ */
+void resetCallback(const std_msgs::Bool::ConstPtr& reset)
 {
     //Save current state
-    reset_state = reset->data!=0;
+    reset_state = reset->data;
     if(reset_state){
         resetSlam();
         consecutive_err_count = 0;
@@ -585,8 +616,8 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& odom){
 
         /// ------- Propagating the states --------------///
         /// Calculate the change in states
-        float delta_x = (vx * cos(th)) * dt;
-        float delta_y = (vx * sin(th)) * dt;
+        float delta_x = (vx * std::cos(th)) * dt;
+        float delta_y = (vx * std::sin(th)) * dt;
         float delta_th = vth * dt;
 
         /// Update the states
@@ -598,13 +629,13 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& odom){
         /// ------- Propagating the states --------------///
         /// Calculating Phi
         Phi = Eigen::MatrixXf::Identity(covariance.rows(),covariance.cols());
-        Phi(0,2) = -dt*vx*sin(th);
-        Phi(1,2) =  dt*vx*cos(th);
+        Phi(0,2) = -dt*vx*std::sin(th);
+        Phi(1,2) =  dt*vx*std::cos(th);
 
         /// Calculating G
         G = Eigen::MatrixXf::Zero(covariance.rows(),2);
-        G(0,0) = -dt*cos(th);
-        G(1,0) = -dt*sin(th);
+        G(0,0) = -dt*std::cos(th);
+        G(1,0) = -dt*std::sin(th);
         G(2,1) = -dt;
 
         covariance = Phi*covariance*Phi.transpose() + G*Q*G.transpose();
@@ -618,8 +649,8 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& odom){
         robot_pose.header.frame_id = world_frame; //!< the solid world coordinate frame that our state is in
         robot_pose.child_frame_id = "odom"; //!< the frame of the robot that is the first 3 elements of the state vector
         double angle = state[ROBOT_P]-tf::getYaw(odom->pose.pose.orientation);
-        double x=cos(angle)*odom->pose.pose.position.x-sin(angle)*odom->pose.pose.position.y;
-        double y=sin(angle)*odom->pose.pose.position.x+cos(angle)*odom->pose.pose.position.y;
+        double x=std::cos(angle)*odom->pose.pose.position.x-std::sin(angle)*odom->pose.pose.position.y;
+        double y=std::sin(angle)*odom->pose.pose.position.x+std::cos(angle)*odom->pose.pose.position.y;
 
         robot_pose.transform.translation.x=state[ROBOT_X]-x;
         robot_pose.transform.translation.y=state[ROBOT_Y]-y;
@@ -709,6 +740,7 @@ int main(int argc, char **argv){
 
     pn.getParam("update_thresh", update_thresh);
     pn.getParam("new_feature_thresh",new_feature_thresh);
+    pn.getParam("num_consecutive_errs",num_consecutive_errs);
     pn.getParam("distance_noise",ekf_distance_noise);
     pn.getParam("bearing_noise",ekf_bearing_noise);
     pn.getParam("phi_noise",ekf_phi_noise);
