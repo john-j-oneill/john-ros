@@ -1,0 +1,41 @@
+
+# set the publisher rate (30 hz)
+tractorcustom_joint_state_controller:
+  type: "joint_state_controller/JointStateController"
+  publish_rate: 30
+
+# set the controller for the loader arm
+frontloader_arm_controller:
+  type: "position_controllers/JointGroupPositionController"
+  joints:
+    - back_to_left_arm
+    - back_to_right_arm
+    - left_arm_to_front_grate
+
+# Set the controller for the fake ackermann steering
+left_steering_ctrlr:
+  joint: base_link_to_front_axle_left
+  type: "effort_controllers/JointPositionController"
+  pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
+right_steering_ctrlr:
+  joint: base_link_to_front_axle_right
+  type: "effort_controllers/JointPositionController"
+  pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
+
+# Set the speed 
+left_front_axle_ctrlr:
+  joint: front_axle_to_left_wheel
+  type: effort_controllers/JointVelocityController
+  pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
+right_front_axle_ctrlr:
+  joint: front_axle_to_right_wheel
+  type: effort_controllers/JointVelocityController
+  pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
+left_rear_axle_ctrlr:
+  joint: rear_axle_to_left_wheel
+  type: effort_controllers/JointVelocityController
+  pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
+right_rear_axle_ctrlr:
+  joint: rear_axle_to_right_wheel
+  type: effort_controllers/JointVelocityController
+  pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}

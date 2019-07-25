@@ -435,7 +435,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="base_link_to_front_axle_right">
-      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
     </joint>
   </transmission>
 	<transmission name="left_steer_trans">
@@ -444,7 +444,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="base_link_to_front_axle_left">
-      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
     </joint>
   </transmission>
 

@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+
+<!--  Launch file just for putting the robot in the world -->
+<launch>
+  <!-- roslaunch ackermann_vehicle_gazebo ackermann_gazebo.launch-->
+
+   <!-- these are the arguments you can pass this launch file, for example paused:=true -->
+  <arg name="paused" default="false"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="gui" default="true"/>
+  <arg name="headless" default="false"/>
+  <arg name="debug" default="false"/>
+  <arg name="model" default="$(find fitzroy_description)/urdf/fitzroy.urdf.xacro" />
+  <arg name="world_name" default="worlds/empty.world"/>
+  <arg name="robot_x" default="-1.5"/>
+  <arg name="robot_y" default="1.5"/>
+  <arg name="robot_z" default="0.1"/>
+  <arg name="robot_yaw" default="0.0"/>
+  <!-- Default to the Danfoss helipad in Nordborg -->
+  <arg name="origin_latitude" default="55.029962" />
+  <arg name="origin_longitude" default="9.818575" />
+  
+  <!-- <arg name="world_name" default="$(find northstar_gazebo)/worlds/simpleworld1.world"/> -->
+  <!-- <arg name="world_name" default="$(find husky_gazebo)/worlds/clearpath_playpen.world"/> -->
+  <!-- <arg name="world_name" default="$(find husky_demo)/worlds/test100xa.world"/> -->
+
+  <!-- Create the world. -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(arg world_name)"/>
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="paused" value="$(arg paused)"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    <arg name="headless" value="$(arg headless)"/>
+  </include>
+
+  <!--  Default to our urdf file: tractor_w_loader.urdf.xacro-->
+  <param name="robot_description" command="$(find xacro)/xacro.py $(arg model) latitude:=$(arg origin_latitude) longitude:=$(arg origin_longitude)" />
+
+  <!-- push robot_description to factory and spawn robot in gazebo  (for yaw add: -Y 3.14) -->
+  <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
+        args="-x $(arg robot_x) -y $(arg robot_y) -z $(arg robot_z) -Y $(arg robot_yaw) -urdf -model robot -param robot_description" respawn="false" output="screen"/>
+
+</launch>
