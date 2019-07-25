@@ -4,14 +4,6 @@ tractorcustom_joint_state_controller:
   type: "joint_state_controller/JointStateController"
   publish_rate: 30
 
-# set the controller for the loader arm
-frontloader_arm_controller:
-  type: "position_controllers/JointGroupPositionController"
-  joints:
-    - back_to_left_arm
-    - back_to_right_arm
-    - left_arm_to_front_grate
-
 # Set the controller for the fake ackermann steering
 left_steering_ctrlr:
   joint: base_link_to_front_axle_left

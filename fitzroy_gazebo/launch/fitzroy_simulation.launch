@@ -34,11 +34,23 @@
     <arg name="headless" value="$(arg headless)"/>
   </include>
 
+	<!-- setup the controller manager for the tractor and joint loader -->
+	<node name="controller_spawner"
+				pkg="controller_manager"
+				type="spawner"
+				args="$(find fitzroy_gazebo)/config/joint_controllers.yaml" />
+
+
   <!--  Default to our urdf file: tractor_w_loader.urdf.xacro-->
   <param name="robot_description" command="$(find xacro)/xacro.py $(arg model) latitude:=$(arg origin_latitude) longitude:=$(arg origin_longitude)" />
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+    <param name="publish_frequency" type="double" value="30.0" />
+  </node>
 
   <!-- push robot_description to factory and spawn robot in gazebo  (for yaw add: -Y 3.14) -->
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
         args="-x $(arg robot_x) -y $(arg robot_y) -z $(arg robot_z) -Y $(arg robot_yaw) -urdf -model robot -param robot_description" respawn="false" output="screen"/>
+
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find fitzroy_gazebo)/rviz/simulation.rviz" />
 
 </launch>

@@ -85,7 +85,7 @@
 	<joint name="base_footprint_to_base_link" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="${wheelbase/2} 0 ${rearwheeldia/2} "/>
+    <origin xyz="0 0 ${rearwheeldia/2} "/>
   </joint>
 
 	<!-- main chasis -->
@@ -97,7 +97,7 @@
 	<joint name="base_link_to_chasis" type="fixed">
     <parent link="base_link"/>
     <child link="chassis"/>
-    <origin xyz="0 0 ${rear_shock_offset} "/>
+    <origin xyz="${wheelbase/2} 0 ${rear_shock_offset + chasisheight/2}"/>
   </joint>
 
 	<!-- rear axle -->
@@ -107,9 +107,9 @@
       dimy="${rearwheelsep-rearwheelwidth}"
       dimz="${axlesize}" />
 	<joint name="base_link_to_rear_axle" type="fixed">
-    <parent link="chassis"/>
+    <parent link="base_link"/>
     <child link="rear_axle"/>
-    <origin xyz="${-wheelbase/2} 0 ${-chasisheight/2 - rear_shock_offset} "/>
+    <origin xyz="0 0 0"/>
   </joint>
 
 	<!-- right rear wheel -->
@@ -333,7 +333,7 @@
 		<material>Gazebo/Red</material>
 	</gazebo>
 
-	<joint name="back_to_left_arm" type="revolute">
+	<joint name="back_to_left_arm" type="fixed">
 		<axis xyz="0 -1 0"/>
     <limit effort="1000.0" lower="${liftmin}" upper="${liftmax}" velocity="0.5"/>
     <parent link="chassis"/>
@@ -363,7 +363,7 @@
 		<material>Gazebo/Red</material>
 	</gazebo>
 
-	<joint name="back_to_right_arm" type="revolute">
+	<joint name="back_to_right_arm" type="fixed">
 		<axis xyz="0 -1 0"/>
     <limit effort="1000.0" lower="${liftmin}" upper="${liftmax}" velocity="0.5"/>
     <parent link="chassis"/>
@@ -381,7 +381,7 @@
   </link>
 
 	<!-- lift front wall with arm -->
-	<joint name="left_arm_to_fork_assembly" type="revolute">
+	<joint name="left_arm_to_fork_assembly" type="fixed">
 		<axis xyz="0 -1 0"/>
     <limit effort="1000.0" lower="${liftmin}" upper="${liftmax}" velocity="0.5"/>
     <parent link="left_arm"/>
@@ -486,7 +486,7 @@
     </joint>
   </transmission>
 
-	<!-- Loader arm transmissions -->
+	<!-- Loader arm transmissions 
 	<transmission name="left_arm_trans">
     <type>transmission_interface/SimpleTransmission</type>
     <actuator name="left_arm_motor">
@@ -514,11 +514,11 @@
       <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
     </joint>
   </transmission>
-
+-->
 	<!-- Specify Plugin for Gazebo-->
 	<gazebo>
     <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
-      <robotNamespace>/fitzroy</robotNamespace>
+      <robotNamespace>/</robotNamespace>
       <robotSimType>gazebo_ros_control/DefaultRobotHWSim</robotSimType>
       <legacyModeNS>true</legacyModeNS>
     </plugin>
@@ -591,13 +591,13 @@
 
 	<!-- Camera -->
   <xacro:include filename="$(find fitzroy_description)/urdf/picam.urdf.xacro"/>
-  <picam parent="base_link" name="camera">
+  <picam parent="chassis" name="camera">
     <origin xyz="${-(wheelbase/2 + rackback)} 0 ${rackheight}" rpy="0 0 0"/>
   </picam>
 
 	<!-- Ultrasonic -->
   <xacro:include filename="$(find fitzroy_description)/urdf/ultrasonic_sensor.urdf.xacro"/>
-  <ultrasonic_sensor parent="base_link" name="ultrasonic">
+  <ultrasonic_sensor parent="chassis" name="ultrasonic">
     <origin xyz="${-(wheelbase/2 + rackback)} 0.020 ${rackheight}" rpy="0 0 0"/>
   </ultrasonic_sensor>
 
