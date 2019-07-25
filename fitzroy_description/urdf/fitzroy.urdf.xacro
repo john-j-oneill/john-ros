@@ -182,24 +182,11 @@
 
 
 	<!-- front axle right -->
-  <link name="front_axle_right">
-    <visual>
-      <geometry>
-        <box size="${axlesize} ${axlesize} ${axlesize}"/>
-      </geometry>
-			<origin rpy="0 0 0" xyz="0 0 0"/>
-			<material name="hideaxle"/>
-    </visual>
-		<collision>
-			<geometry>
-				<box size="${axlesize} ${axlesize} ${axlesize}"/>
-			</geometry>
-		</collision>
-		<xacro:default_inertial mass="10"/>
-  </link>
-	<gazebo reference="front_axle_right">
-		<material>Gazebo/White</material>
-	</gazebo>
+	<xacro:cube_aluminum
+      name="front_axle_right" 
+      dimx="${axlesize}" 
+      dimy="${axlesize}"
+      dimz="${axlesize}" />
 	<joint name="base_link_to_front_axle_right" type="revolute">
 		<axis xyz="0 0 1"/>
     <limit effort="${steer_eff_limit}" lower="${turnmin}" upper="${turnmax}" velocity="${steer_vel_limit}"/>
@@ -209,24 +196,11 @@
   </joint>
 
 	<!-- front axle left -->
-	<link name="front_axle_left">
-    <visual>
-      <geometry>
-        <box size="${axlesize} ${axlesize} ${axlesize}"/>
-      </geometry>
-			<origin rpy="0 0 0" xyz="0 0 0"/>
-			<material name="hideaxle"/>
-    </visual>
-		<collision>
-			<geometry>
-				<box size="${axlesize} ${axlesize} ${axlesize}"/>
-			</geometry>
-		</collision>
-		<xacro:default_inertial mass="10"/>
-  </link>
-	<gazebo reference="front_axle_left">
-		<material>Gazebo/White</material>
-	</gazebo>
+	<xacro:cube_aluminum
+      name="front_axle_left" 
+      dimx="${axlesize}" 
+      dimy="${axlesize}"
+      dimz="${axlesize}" />
 	<joint name="base_link_to_front_axle_left" type="revolute">
 		<axis xyz="0 0 1"/>
     <limit effort="${steer_eff_limit}" lower="${turnmin}" upper="${turnmax}" velocity="${steer_vel_limit}"/>
@@ -461,7 +435,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="base_link_to_front_axle_right">
-      <hardwareInterface>PositionJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
     </joint>
   </transmission>
 	<transmission name="left_steer_trans">
@@ -470,7 +444,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="base_link_to_front_axle_left">
-      <hardwareInterface>PositionJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
     </joint>
   </transmission>
 
@@ -481,7 +455,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="front_axle_to_right_wheel">
-      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
     </joint>
   </transmission>
 	<transmission name="right_rear_wheel_trans">
@@ -490,7 +464,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="rear_axle_to_right_wheel">
-      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
     </joint>
   </transmission>
 	<transmission name="left_front_wheel_trans">
@@ -499,7 +473,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="front_axle_to_left_wheel">
-      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
     </joint>
   </transmission>
 	<transmission name="left_rear_wheel_trans">
@@ -508,7 +482,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="rear_axle_to_left_wheel">
-      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
     </joint>
   </transmission>
 
@@ -519,7 +493,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="back_to_left_arm">
-      <hardwareInterface>PositionJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
     </joint>
   </transmission>
 	<transmission name="right_arm_trans">
@@ -528,7 +502,7 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="back_to_right_arm">
-      <hardwareInterface>PositionJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
     </joint>
   </transmission>
 	<transmission name="left_grate_trans">
@@ -537,14 +511,16 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
     <joint name="left_arm_to_fork_assembly">
-      <hardwareInterface>PositionJointInterface</hardwareInterface>
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
     </joint>
   </transmission>
 
 	<!-- Specify Plugin for Gazebo-->
 	<gazebo>
     <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
-      <robotNamespace>/</robotNamespace>
+      <robotNamespace>/fitzroy</robotNamespace>
+      <robotSimType>gazebo_ros_control/DefaultRobotHWSim</robotSimType>
+      <legacyModeNS>true</legacyModeNS>
     </plugin>
 
 

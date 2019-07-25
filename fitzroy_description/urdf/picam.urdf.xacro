@@ -17,7 +17,7 @@
 	<link name="${name}_link">
     <collision>
       <geometry>
-    		<box size="${picam_thickness} ${picam_width} ${picam_height} "/>
+    	  <box size="${picam_thickness} ${picam_width} ${picam_height} "/>
       </geometry>
     </collision>
     <visual>
