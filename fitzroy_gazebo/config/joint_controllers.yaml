@@ -1,6 +1,6 @@
 
 # set the publisher rate (30 hz)
-tractorcustom_joint_state_controller:
+fitzroy_joint_state_controller:
   type: "joint_state_controller/JointStateController"
   publish_rate: 30
 
@@ -8,26 +8,26 @@ tractorcustom_joint_state_controller:
 left_steering_ctrlr:
   joint: base_link_to_front_axle_left
   type: "effort_controllers/JointPositionController"
-  pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
+  pid: {p: 1.0, i: 0.0, d: 0.0, i_clamp: 10.0}
 right_steering_ctrlr:
   joint: base_link_to_front_axle_right
   type: "effort_controllers/JointPositionController"
-  pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
+  pid: {p: 1.0, i: 0.0, d: 0.0, i_clamp: 10.0}
 
 # Set the speed 
 left_front_axle_ctrlr:
   joint: front_axle_to_left_wheel
-  type: effort_controllers/JointVelocityController
+  type: effort_controllers/JointEffortController
   pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
 right_front_axle_ctrlr:
   joint: front_axle_to_right_wheel
-  type: effort_controllers/JointVelocityController
+  type: effort_controllers/JointEffortController
   pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
 left_rear_axle_ctrlr:
   joint: rear_axle_to_left_wheel
-  type: effort_controllers/JointVelocityController
+  type: effort_controllers/JointEffortController
   pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
 right_rear_axle_ctrlr:
   joint: rear_axle_to_right_wheel
-  type: effort_controllers/JointVelocityController
+  type: effort_controllers/JointEffortController
   pid: {p: 20.0, i: 1.0, d: 0.0, i_clamp: 10.0}
