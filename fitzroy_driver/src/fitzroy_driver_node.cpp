@@ -1,0 +1,451 @@
+#include "ros/ros.h"
+#include "ros/console.h"
+#include "tf/transform_broadcaster.h"
+#include "nav_msgs/Odometry.h"
+#include "iostream"
+#include "std_msgs/String.h"
+#include "std_msgs/MultiArrayLayout.h"
+#include "std_msgs/MultiArrayDimension.h"
+#include "std_msgs/Float32MultiArray.h"
+#include "std_msgs/Float32.h"
+#include "sensor_msgs/BatteryState.h"
+#include "sensor_msgs/Range.h"
+#include "sensor_msgs/NavSatFix.h"
+#include "sensor_msgs/Imu.h"
+#include "sensor_msgs/Temperature.h"
+#include "sensor_msgs/JointState.h"
+#include "diagnostic_msgs/DiagnosticStatus.h"
+
+#include <sstream>
+
+///////////////   ALL SENSORS STUFFED INTO AN ARRAY OF FLOATS   ////////////////////////////////
+/////////////// This is partly because the arduino ros library  ////////////////////////////////
+/////////////// is limited in the message types it supports,    ////////////////////////////////
+/////////////// and partly to save bandwidth & processing.      ////////////////////////////////
+/////////////// As much as possible, they are in standard units ////////////////////////////////
+enum array_indices_teensy_out{
+    PROPEL,     /// In radians/sec
+    STEER,		/// In radians
+    DTIME,		/// For integration
+    VOLT_BAT,	/// Battery state
+    VOLT_5V,	/// Maybe a battery state msg?
+    TOF_1,		/// Range
+    TOF_2,		/// Range
+    ULTRASONIC,	/// Range
+    AUX_1,		/// Could be IR range sensor? \todo use param to tell what it actually is.
+    AUX_2,		/// Could be IR range sensor? \todo use param to tell what it actually is.
+    AUX_3,		/// Could be IR range sensor? \todo use param to tell what it actually is.
+/// The MPU 6050 goes into an Imu message
+    IMU_ACC_X,
+    IMU_ACC_Y,
+    IMU_ACC_Z,
+    IMU_ROT_X,
+    IMU_ROT_Y,
+    IMU_ROT_Z,
+/// The GPS goes into a NavSatFix message
+    GPS_LAT,
+    GPS_LON,
+/// These could be redundant to propel/steer but are all here for completeness
+/// They will all be packed into one JointState message
+    MOT1_POS,
+    MOT1_VEL,
+    MOT1_EFT,
+    MOT2_POS,
+    MOT2_VEL,
+    MOT2_EFT,
+    MOT3_POS,
+    MOT3_VEL,
+    MOT3_EFT,
+    MOT4_POS,
+    MOT4_VEL,
+    MOT4_EFT,
+/// Servos do not have feedback, but we can rate limit them and assume that we are at the target
+/// \todo Figure out which message to include this in. Maybe the joint states?
+    SERVO_1,
+    SERVO_2,
+/// Dunno why we would need this, but it's on the MPU6050
+    TEMPERATURE,
+    TEENSY_OUT_ARRSIZE
+};
+
+/// Robot dimensions
+float wheel_base = 0.137f;
+float rear_wheel_dia = 0.064f;
+float front_wheel_dia = rear_wheel_dia;
+
+float ir_range_of_detection = 0.05; // meters
+float ir_field_of_view = 0.1; // radians
+
+/// HC-SR04
+float us_field_of_view = 30.0*M_PI/180;
+float us_min_range = 0.02;
+float us_max_range = 4.00;
+
+/// VL53L0X
+float tof_field_of_view = 25.0*M_PI/180;
+float tof_min_range = 0.03;
+float tof_max_range = 2.00;
+
+float max_batt_voltage = 12.7; // VDC
+float min_batt_voltage = 11.5; // VDC
+float no_batt_voltage  = 6.0;  // VDC
+
+float cmdvel_timeout = 2.0;
+float gps_x_cov = 1.0;
+float gps_y_cov = 1.0;
+
+/// timing stuff
+ros::Time current_time, last_time;
+
+/// broadcaster stuff
+ros::Publisher pub_odom;
+ros::Publisher pub_battery;
+ros::Publisher pub_5v;
+ros::Publisher pub_arduino_status;
+ros::Publisher pub_gps;
+ros::Publisher pub_imu;
+ros::Publisher pub_joints;
+ros::Publisher pub_temp;
+
+/// Range messages
+ros::Publisher pub_tof_1;
+ros::Publisher pub_tof_2;
+ros::Publisher pub_ultrasonic;
+ros::Publisher pub_ir_1;
+ros::Publisher pub_ir_2;
+ros::Publisher pub_ir_3;
+
+float current_x = 0.f;
+float current_y = 0.f;
+float current_th = 0.f;
+
+
+void propogate(float dt,float propel_speed, float twist_rate)
+{
+    /// Propagate the robot using basic odom
+    current_x += propel_speed*cos(current_th) * dt;
+    current_y += propel_speed*sin(current_th) * dt;
+    current_th += twist_rate * dt;
+}
+
+float twist2angle(float twist_rate, float propel_speed)
+{
+  return std::atan(wheel_base/propel_speed*twist_rate);
+}
+
+float angle2twist(float steering_angle,float propel_speed)
+{
+  return propel_speed/wheel_base*std::tan(steering_angle);
+}
+
+//callbacks for getting velocity data
+void sub_actual(const std_msgs::Float32MultiArray& msg)
+{
+    current_time = ros::Time::now();
+    if(msg.data.size()>DTIME){
+        static tf::TransformBroadcaster odom_broadcaster;
+
+		//compute the odoms
+		float propel_speed = msg.data[PROPEL];
+		float steering_angle = msg.data[STEER];
+		float twist_rate = angle2twist(steering_angle, propel_speed);
+		propogate((current_time - last_time).toSec(),propel_speed,twist_rate);
+
+		//Now setup all the odom nodes
+		//since all odometry is 6DOF we'll need a quaternion created from yaw
+		geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(current_th);
+
+		//first, we'll publish the transform over tf
+		geometry_msgs::TransformStamped odom_trans;
+		odom_trans.header.stamp = current_time;
+		odom_trans.header.frame_id = "odom";
+		odom_trans.child_frame_id = "base_link";
+
+		odom_trans.transform.translation.x = current_x;
+		odom_trans.transform.translation.y = current_y;
+		odom_trans.transform.translation.z = 0.0;
+		odom_trans.transform.rotation = odom_quat;
+
+		//send the transform
+		odom_broadcaster.sendTransform(odom_trans);
+
+		//next, we'll publish the odometry message over ROS
+		nav_msgs::Odometry odom;
+		odom.header.stamp = current_time;
+		odom.header.frame_id = "odom";
+
+		//set the position
+		odom.pose.pose.position.x = current_x;
+		odom.pose.pose.position.y = current_y;
+		odom.pose.pose.position.z = 0.0;
+		odom.pose.pose.orientation = odom_quat;
+
+		//set the velocity
+		odom.child_frame_id = "base_link";
+		odom.twist.twist.linear.x = propel_speed;
+		odom.twist.twist.linear.y = 0.0;
+		odom.twist.twist.angular.z = twist_rate;
+
+		//publish the odom message
+		pub_odom.publish(odom);
+
+		//timer update
+        last_time = current_time;
+    }
+
+    if(msg.data.size()>VOLT_BAT){
+        sensor_msgs::BatteryState batt_msg;
+        batt_msg.design_capacity=2.2;
+        batt_msg.header.frame_id="fitzroy_battery";
+        batt_msg.header.stamp=current_time;
+        batt_msg.power_supply_technology=sensor_msgs::BatteryState::POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
+        batt_msg.power_supply_health=sensor_msgs::BatteryState::POWER_SUPPLY_HEALTH_GOOD;
+        batt_msg.power_supply_status=sensor_msgs::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING;
+        batt_msg.voltage=msg.data[VOLT_BAT];
+
+        /// \warning This is assuming that we can measure the state of charge from the voltage!
+        /// This is a silly thing to do if we are drawing power from the battery!
+        /// Which we are always doing!
+        /// So this is all bunk!
+        batt_msg.percentage=(msg.data[VOLT_BAT]-min_batt_voltage)/(max_batt_voltage-min_batt_voltage);
+        if(batt_msg.percentage>1.0){
+            batt_msg.percentage=1.0;
+        }
+        if(batt_msg.percentage<=0.0){
+            batt_msg.percentage=0.0;
+            batt_msg.power_supply_health=sensor_msgs::BatteryState::POWER_SUPPLY_HEALTH_DEAD;
+        }
+
+        if(msg.data[VOLT_BAT] < no_batt_voltage){
+            ROS_WARN_THROTTLE(5.0,"Fitzroy Switched Off.");
+            batt_msg.power_supply_status=sensor_msgs::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;
+            batt_msg.power_supply_health=sensor_msgs::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN;
+        }else if(msg.data[VOLT_BAT] < min_batt_voltage){
+            batt_msg.power_supply_health=sensor_msgs::BatteryState::POWER_SUPPLY_HEALTH_DEAD;
+            ROS_WARN_THROTTLE(5.0,"Fitzroy Battery Dead.  Recharge.");
+        }
+
+        pub_battery.publish(batt_msg);
+    }
+    if(msg.data.size()>VOLT_5V){
+        /// This is a bit silly, but at least its a tiny message.
+        std_msgs::Float32 volt_msg;
+        volt_msg.data = msg.data[VOLT_5V];
+        pub_5v.publish(volt_msg);
+    }
+    if(msg.data.size()>TOF_1){
+        sensor_msgs::Range range_msg;
+        range_msg.radiation_type = 2; /// Only options are IR and US, so for TOF I just picked something that isn't those two.
+        range_msg.min_range = tof_min_range;
+        range_msg.max_range = tof_max_range;
+        range_msg.header.frame_id = "fitzroy_tof1";
+        range_msg.header.stamp = current_time;
+        range_msg.field_of_view = tof_field_of_view;
+        range_msg.range = msg.data[TOF_1];
+        pub_tof_1.publish(range_msg);
+    }
+    if(msg.data.size()>TOF_2){
+        sensor_msgs::Range range_msg;
+        range_msg.radiation_type = 2; /// Only options are IR and US, so for TOF I just picked something that isn't those two.
+        range_msg.min_range = tof_min_range;
+        range_msg.max_range = tof_max_range;
+        range_msg.header.frame_id = "fitzroy_tof2";
+        range_msg.header.stamp = current_time;
+        range_msg.field_of_view = tof_field_of_view;
+        range_msg.range = msg.data[TOF_2];
+        pub_tof_2.publish(range_msg);
+    }
+    if(msg.data.size()>ULTRASONIC){
+        sensor_msgs::Range range_msg;
+        range_msg.radiation_type = sensor_msgs::Range::ULTRASOUND;
+        range_msg.min_range = us_min_range;
+        range_msg.max_range = us_max_range;
+        range_msg.header.frame_id = "fitzroy_us";
+        range_msg.header.stamp = current_time;
+        range_msg.field_of_view = us_field_of_view;
+        range_msg.range = msg.data[ULTRASONIC];
+        pub_ir_3.publish(range_msg);
+    }
+    if(msg.data.size()>AUX_1){
+        sensor_msgs::Range range_msg;
+        range_msg.radiation_type = sensor_msgs::Range::INFRARED;
+        range_msg.min_range = range_msg.max_range = ir_range_of_detection;
+        range_msg.header.frame_id = "fitzroy_ir1";
+        range_msg.header.stamp = current_time;
+        range_msg.field_of_view = ir_field_of_view;
+        /// Apparently for on/off range sensors we use +/- infinity? Seems odd to me, but okay.
+        if(msg.data[AUX_1]<0.5f)
+        {
+            range_msg.range = -std::numeric_limits<float>::infinity();
+        }else{
+            range_msg.range =  std::numeric_limits<float>::infinity();
+        }
+        pub_ir_1.publish(range_msg);
+    }
+    if(msg.data.size()>AUX_2){
+        sensor_msgs::Range range_msg;
+        range_msg.radiation_type = sensor_msgs::Range::INFRARED;
+        range_msg.min_range = range_msg.max_range = ir_range_of_detection;
+        range_msg.header.frame_id = "fitzroy_ir2";
+        range_msg.header.stamp = current_time;
+        range_msg.field_of_view = ir_field_of_view;
+        /// Apparently for on/off range sensors we use +/- infinity? Seems odd to me, but okay.
+        if(msg.data[AUX_2]<0.5f)
+        {
+            range_msg.range = -std::numeric_limits<float>::infinity();
+        }else{
+            range_msg.range =  std::numeric_limits<float>::infinity();
+        }
+        pub_ir_2.publish(range_msg);
+    }
+    if(msg.data.size()>AUX_3){
+        sensor_msgs::Range range_msg;
+        range_msg.radiation_type = sensor_msgs::Range::INFRARED;
+        range_msg.min_range = range_msg.max_range = ir_range_of_detection;
+        range_msg.header.frame_id = "fitzroy_ir3";
+        range_msg.header.stamp = current_time;
+        range_msg.field_of_view = ir_field_of_view;
+        /// Apparently for on/off range sensors we use +/- infinity? Seems odd to me, but okay.
+        if(msg.data[AUX_3]<0.5f)
+        {
+            range_msg.range = -std::numeric_limits<float>::infinity();
+        }else{
+            range_msg.range =  std::numeric_limits<float>::infinity();
+        }
+        pub_ir_3.publish(range_msg);
+    }
+    if(msg.data.size()>IMU_ROT_Z)
+    {
+        /// \todo fill out the rest of the message, including covariance and whatnot
+        sensor_msgs::Imu imu_msg;
+        imu_msg.header.stamp = current_time;
+        imu_msg.header.frame_id = "fitzroy_imu";
+        imu_msg.linear_acceleration.x = msg.data[IMU_ACC_X];
+        imu_msg.linear_acceleration.y = msg.data[IMU_ACC_Y];
+        imu_msg.linear_acceleration.z = msg.data[IMU_ACC_Z];
+        imu_msg.angular_velocity.x = msg.data[IMU_ROT_X];
+        imu_msg.angular_velocity.y = msg.data[IMU_ROT_Y];
+        imu_msg.angular_velocity.z = msg.data[IMU_ROT_Z];
+        pub_imu.publish(imu_msg);
+    }
+    if(msg.data.size()>GPS_LON)
+    {
+        /// \todo fill out the rest of the message, including covariance and whatnot
+        sensor_msgs::NavSatFix gps_msg;
+        gps_msg.header.stamp = current_time;
+        gps_msg.header.frame_id = "fitzroy_gps";
+        gps_msg.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
+        gps_msg.altitude = 0.0;
+        gps_msg.latitude = msg.data[GPS_LAT];
+        gps_msg.longitude = msg.data[GPS_LON];
+        pub_gps.publish(gps_msg);
+    }
+    if(msg.data.size()>MOT4_EFT)
+    {
+        sensor_msgs::JointState joint_msg;
+        joint_msg.header.stamp = current_time;
+        joint_msg.header.frame_id = "fitzroy_joints";
+        joint_msg.name.push_back("fitzroy_motor1");
+        joint_msg.name.push_back("fitzroy_motor2");
+        joint_msg.name.push_back("fitzroy_motor3");
+        joint_msg.name.push_back("fitzroy_motor4");
+        joint_msg.position.push_back(msg.data[MOT1_POS]);
+        joint_msg.position.push_back(msg.data[MOT2_POS]);
+        joint_msg.position.push_back(msg.data[MOT3_POS]);
+        joint_msg.position.push_back(msg.data[MOT4_POS]);
+        joint_msg.velocity.push_back(msg.data[MOT1_VEL]);
+        joint_msg.velocity.push_back(msg.data[MOT2_VEL]);
+        joint_msg.velocity.push_back(msg.data[MOT3_VEL]);
+        joint_msg.velocity.push_back(msg.data[MOT4_VEL]);
+        joint_msg.effort.push_back(msg.data[MOT1_EFT]);
+        joint_msg.effort.push_back(msg.data[MOT2_EFT]);
+        joint_msg.effort.push_back(msg.data[MOT3_EFT]);
+        joint_msg.effort.push_back(msg.data[MOT4_EFT]);
+
+        if(msg.data.size()>SERVO_2)
+        {
+            /// This is a bit silly, since we don't have position feedback on the servos anyways, but hey whynot.
+            joint_msg.name.push_back("fitzroy_servo1");
+            joint_msg.name.push_back("fitzroy_servo2");
+            joint_msg.position.push_back(msg.data[SERVO_1]);
+            joint_msg.position.push_back(msg.data[SERVO_2]);
+            joint_msg.velocity.push_back(0.0);
+            joint_msg.velocity.push_back(0.0);
+            joint_msg.effort.push_back(0.0);
+            joint_msg.effort.push_back(0.0);
+        }
+
+        pub_joints.publish(joint_msg);
+    }
+    if(msg.data.size()>TEMPERATURE)
+    {
+        sensor_msgs::Temperature temp_msg;
+        temp_msg.header.stamp = current_time;
+        temp_msg.header.frame_id = "fitzroy_imu";
+        temp_msg.variance = 0.0; /// 0 is interpreted as variance unknown
+        temp_msg.temperature = msg.data[TEMPERATURE];
+        pub_temp.publish(temp_msg);
+    }
+    else{
+        //ROS_WARN_ONCE("Ronny Arduino Message Undersized!  WTF, Mate?");
+    }
+}
+
+void watchdogCallback(const ros::TimerEvent&){
+    ros::Duration dt=ros::Time::now() - last_time;
+    diagnostic_msgs::DiagnosticStatus msg;
+    msg.level=diagnostic_msgs::DiagnosticStatus::OK;
+    msg.name="fitzroy_arduino";
+    if(dt.toSec()>cmdvel_timeout){
+        /// If we haven't seen a valid message in two seconds, something has gone horribly wrong.
+        msg.level=diagnostic_msgs::DiagnosticStatus::ERROR;
+    }
+    pub_arduino_status.publish(msg);
+}
+
+int main(int argc, char **argv)
+{
+	//intialize ROS
+	ros::init(argc, argv, "fitzroy_driver");
+
+	//Setup all the nodes
+	ros::NodeHandle nh;
+	ros::NodeHandle pnh("~");
+	ros::Subscriber sub_velocity_actual = nh.subscribe("velocity_actual", 1000, sub_actual);
+
+	/// broadcaster stuff
+	pub_odom			= pnh.advertise<nav_msgs::Odometry				>("odom", 1);
+	pub_battery			= pnh.advertise<sensor_msgs::BatteryState		>("battery", 1);
+	pub_5v				= pnh.advertise<std_msgs::Float32				>("logic_voltage", 1);
+	pub_arduino_status  = pnh.advertise<diagnostic_msgs::DiagnosticStatus >("arduino_status", 1);
+	pub_odom			= pnh.advertise<nav_msgs::Odometry				>("odom", 1);
+	pub_gps				= pnh.advertise<sensor_msgs::NavSatFix			>("gps", 1);
+	pub_imu				= pnh.advertise<sensor_msgs::Imu				>("imu", 1);
+	pub_joints			= pnh.advertise<sensor_msgs::JointState			>("joint_states", 1);
+	pub_temp			= pnh.advertise<sensor_msgs::Temperature		>("temperature", 1);
+
+	/// Range messages
+	pub_tof_1			= pnh.advertise<sensor_msgs::Range				>("tof_1", 1);
+	pub_tof_2			= pnh.advertise<sensor_msgs::Range				>("tof_2", 1);
+	pub_ultrasonic		= pnh.advertise<sensor_msgs::Range				>("ultrasonic", 1);
+	pub_ir_1			= pnh.advertise<sensor_msgs::Range				>("pub_ir_1", 1);
+	pub_ir_2			= pnh.advertise<sensor_msgs::Range				>("pub_ir_2", 1);
+	pub_ir_3			= pnh.advertise<sensor_msgs::Range				>("pub_ir_3", 1);
+
+	ros::Timer timer = nh.createTimer(ros::Duration(1.0), watchdogCallback);
+
+	//timing stuff
+	current_time = ros::Time::now();
+	last_time = current_time;
+
+    pnh.getParam("wheel_base",wheel_base);
+    pnh.getParam("rear_wheel_dia",rear_wheel_dia);
+    pnh.getParam("front_wheel_dia",front_wheel_dia);
+    pnh.getParam("ir_range_of_detection",ir_range_of_detection);
+    pnh.getParam("ir_field_of_view",ir_field_of_view);
+
+    ros::spin();
+
+
+	return 0;
+}
