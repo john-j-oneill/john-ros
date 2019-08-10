@@ -1,0 +1,25 @@
+<launch>
+
+  <arg name="camera_name" default="lifecam_right"/>
+
+  <!-- Webcam stuff. This works on my laptop, but for any other computer at least
+       redo the calibration: http://wiki.ros.org/camera_calibration -->
+  <node name="Jubilee" pkg="usb_cam" type="usb_cam_node">
+    <param name="image_width" value="1920" />
+    <param name="image_height" value="1080" />
+    <param name="camera_name" value="$(arg camera_name)" />
+    <param name="pixel_format" value="yuyv" />
+    <param name="camera_frame_id" value="$(arg camera_name)" />
+    <param name="video_device" value="/dev/lifecam_right" />
+  </node>
+
+  <node pkg="camera_calibration" type="cameracalibrator.py" name="Bakerloo" output="screen" args=" --size 4x11 --square 0.020 --pattern acircles --no-service-check" >
+    <!-- The image itself. Should also have a camera_info that is valid. -->
+    <remap from="image" to="/Jubilee/image_raw" />
+    <!-- Publish out the image with the QR code(s) highlighted. 
+         Will slow things down, but useful for debugging. 
+         TODO: check to see if actually slower if no one subscribed anyways? -->
+    <param name="camera" value="my_camera" />
+  </node>
+
+</launch>
