@@ -135,6 +135,7 @@ include_directories(
 
 ## Declare a C++ executable
 add_executable(cv_barcode_node src/cv_barcode_node.cpp)
+add_executable(cv_rotate src/cv_rotate.cpp)
 
 
 ## Add cmake target dependencies of the executable
@@ -145,6 +146,10 @@ add_executable(cv_barcode_node src/cv_barcode_node.cpp)
 target_link_libraries(cv_barcode_node
   ${catkin_LIBRARIES}
   zbar
+)
+## Specify libraries to link a library or executable target against
+target_link_libraries(cv_rotate
+  ${catkin_LIBRARIES}
 )
 #############
 ## Install ##
