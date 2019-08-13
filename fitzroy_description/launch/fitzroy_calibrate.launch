@@ -1,0 +1,13 @@
+<launch>
+  <!-- rosrun raspicam_stills raspicam_stills_node -o -v -rgb -n -t 0 -tl 2000 -->
+  <node name="raspicam_node" pkg="raspicam_node" type="raspicam_node">
+    <param name="enable_raw" value="true"/>
+    <remap from="/raspicam_node/image" to="/rgb/image_rect"/>
+  </node>
+
+  <node name="camera_calibration" pkg="camera_calibration" type="cameracalibrator.py" args=" --size 4x11 --square 0.020 --pattern=acircles --no-service-check " respawn="false" output="screen" >
+    <remap from="image" to="/rgb/image_rect"/>
+  </node>
+
+</launch>
+
