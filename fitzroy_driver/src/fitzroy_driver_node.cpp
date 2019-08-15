@@ -68,10 +68,30 @@ enum array_indices_teensy_out{
     TEENSY_OUT_ARRSIZE
 };
 
+enum array_indices_teensy_in{
+    TARGET_PROPEL,      /// In radians/sec
+    TARGET_STEER,       /// In radians
+/// These could be redundant to propel/steer but are all here for completeness
+    TARGET_MOT1,
+    TARGET_MOT2,
+    TARGET_MOT3,
+    TARGET_MOT4,
+    TARGET_SERVO_1,
+    TARGET_SERVO_2,
+    TEENSY_IN_ARRSIZE
+};
+
 /// Robot dimensions
 float wheel_base = 0.137f;
 float rear_wheel_dia = 0.064f;
 float front_wheel_dia = rear_wheel_dia;
+std::string robot_name = "fitzroy";
+std::string motor1_name = robot_name + "_motor1";
+std::string motor2_name = robot_name + "_motor2";
+std::string motor3_name = robot_name + "_motor3";
+std::string motor4_name = robot_name + "_motor4";
+std::string servo1_name = robot_name + "_servo1";
+std::string servo2_name = robot_name + "_servo2";
 
 float ir_range_of_detection = 0.05; // meters
 float ir_field_of_view = 0.1; // radians
@@ -98,6 +118,7 @@ float gps_y_cov = 1.0;
 ros::Time current_time, last_time;
 
 /// broadcaster stuff
+ros::Publisher pub_to_serial;
 ros::Publisher pub_odom;
 ros::Publisher pub_battery;
 ros::Publisher pub_5v;
@@ -196,7 +217,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
     if(msg.data.size()>VOLT_BAT){
         sensor_msgs::BatteryState batt_msg;
         batt_msg.design_capacity=2.2;
-        batt_msg.header.frame_id="fitzroy_battery";
+        batt_msg.header.frame_id=robot_name + "_battery";
         batt_msg.header.stamp=current_time;
         batt_msg.power_supply_technology=sensor_msgs::BatteryState::POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
         batt_msg.power_supply_health=sensor_msgs::BatteryState::POWER_SUPPLY_HEALTH_GOOD;
@@ -238,7 +259,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         range_msg.radiation_type = 2; /// Only options are IR and US, so for TOF I just picked something that isn't those two.
         range_msg.min_range = tof_min_range;
         range_msg.max_range = tof_max_range;
-        range_msg.header.frame_id = "fitzroy_tof1";
+        range_msg.header.frame_id = robot_name + "_tof1";
         range_msg.header.stamp = current_time;
         range_msg.field_of_view = tof_field_of_view;
         range_msg.range = msg.data[TOF_1];
@@ -249,7 +270,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         range_msg.radiation_type = 2; /// Only options are IR and US, so for TOF I just picked something that isn't those two.
         range_msg.min_range = tof_min_range;
         range_msg.max_range = tof_max_range;
-        range_msg.header.frame_id = "fitzroy_tof2";
+        range_msg.header.frame_id = robot_name + "_tof2";
         range_msg.header.stamp = current_time;
         range_msg.field_of_view = tof_field_of_view;
         range_msg.range = msg.data[TOF_2];
@@ -260,7 +281,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         range_msg.radiation_type = sensor_msgs::Range::ULTRASOUND;
         range_msg.min_range = us_min_range;
         range_msg.max_range = us_max_range;
-        range_msg.header.frame_id = "fitzroy_us";
+        range_msg.header.frame_id = robot_name + "_us";
         range_msg.header.stamp = current_time;
         range_msg.field_of_view = us_field_of_view;
         range_msg.range = msg.data[ULTRASONIC];
@@ -270,7 +291,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         sensor_msgs::Range range_msg;
         range_msg.radiation_type = sensor_msgs::Range::INFRARED;
         range_msg.min_range = range_msg.max_range = ir_range_of_detection;
-        range_msg.header.frame_id = "fitzroy_ir1";
+        range_msg.header.frame_id = robot_name + "_ir1";
         range_msg.header.stamp = current_time;
         range_msg.field_of_view = ir_field_of_view;
         /// Apparently for on/off range sensors we use +/- infinity? Seems odd to me, but okay.
@@ -286,7 +307,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         sensor_msgs::Range range_msg;
         range_msg.radiation_type = sensor_msgs::Range::INFRARED;
         range_msg.min_range = range_msg.max_range = ir_range_of_detection;
-        range_msg.header.frame_id = "fitzroy_ir2";
+        range_msg.header.frame_id = robot_name + "_ir2";
         range_msg.header.stamp = current_time;
         range_msg.field_of_view = ir_field_of_view;
         /// Apparently for on/off range sensors we use +/- infinity? Seems odd to me, but okay.
@@ -302,7 +323,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         sensor_msgs::Range range_msg;
         range_msg.radiation_type = sensor_msgs::Range::INFRARED;
         range_msg.min_range = range_msg.max_range = ir_range_of_detection;
-        range_msg.header.frame_id = "fitzroy_ir3";
+        range_msg.header.frame_id = robot_name + "_ir3";
         range_msg.header.stamp = current_time;
         range_msg.field_of_view = ir_field_of_view;
         /// Apparently for on/off range sensors we use +/- infinity? Seems odd to me, but okay.
@@ -319,7 +340,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         /// \todo fill out the rest of the message, including covariance and whatnot
         sensor_msgs::Imu imu_msg;
         imu_msg.header.stamp = current_time;
-        imu_msg.header.frame_id = "fitzroy_imu";
+        imu_msg.header.frame_id = robot_name + "_imu";
         imu_msg.linear_acceleration.x = msg.data[IMU_ACC_X];
         imu_msg.linear_acceleration.y = msg.data[IMU_ACC_Y];
         imu_msg.linear_acceleration.z = msg.data[IMU_ACC_Z];
@@ -330,12 +351,20 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
     }
     if(msg.data.size()>GPS_LON)
     {
-        /// \todo fill out the rest of the message, including covariance and whatnot
+        /// \todo include altitude and HDOP, then calculate covariance from HDOP
         sensor_msgs::NavSatFix gps_msg;
         gps_msg.header.stamp = current_time;
-        gps_msg.header.frame_id = "fitzroy_gps";
+        gps_msg.header.frame_id = robot_name + "_gps";
+        if(isnan(msg.data[GPS_LAT]) || isnan(msg.data[GPS_LON]))
+        {
+            gps_msg.status.status = sensor_msgs::NavSatStatus::STATUS_NO_FIX;
+        }else{
+            gps_msg.status.status = sensor_msgs::NavSatStatus::STATUS_FIX;
+        }
+        /// The ublox neo-6m is gps only
+        gps_msg.status.service = sensor_msgs::NavSatStatus::SERVICE_GPS;
         gps_msg.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
-        gps_msg.altitude = 0.0;
+        gps_msg.altitude = std::numeric_limits<double>::quiet_NaN();
         gps_msg.latitude = msg.data[GPS_LAT];
         gps_msg.longitude = msg.data[GPS_LON];
         pub_gps.publish(gps_msg);
@@ -344,11 +373,11 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
     {
         sensor_msgs::JointState joint_msg;
         joint_msg.header.stamp = current_time;
-        joint_msg.header.frame_id = "fitzroy_joints";
-        joint_msg.name.push_back("fitzroy_motor1");
-        joint_msg.name.push_back("fitzroy_motor2");
-        joint_msg.name.push_back("fitzroy_motor3");
-        joint_msg.name.push_back("fitzroy_motor4");
+        joint_msg.header.frame_id = robot_name + "_joints";
+        joint_msg.name.push_back(motor1_name);
+        joint_msg.name.push_back(motor2_name);
+        joint_msg.name.push_back(motor3_name);
+        joint_msg.name.push_back(motor4_name);
         joint_msg.position.push_back(msg.data[MOT1_POS]);
         joint_msg.position.push_back(msg.data[MOT2_POS]);
         joint_msg.position.push_back(msg.data[MOT3_POS]);
@@ -365,10 +394,11 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         if(msg.data.size()>SERVO_2)
         {
             /// This is a bit silly, since we don't have position feedback on the servos anyways, but hey whynot.
-            joint_msg.name.push_back("fitzroy_servo1");
-            joint_msg.name.push_back("fitzroy_servo2");
+            joint_msg.name.push_back(servo1_name);
+            joint_msg.name.push_back(servo2_name);
             joint_msg.position.push_back(msg.data[SERVO_1]);
             joint_msg.position.push_back(msg.data[SERVO_2]);
+            /// No velocity or effort info available. Maybe shoud be NANs?
             joint_msg.velocity.push_back(0.0);
             joint_msg.velocity.push_back(0.0);
             joint_msg.effort.push_back(0.0);
@@ -381,7 +411,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
     {
         sensor_msgs::Temperature temp_msg;
         temp_msg.header.stamp = current_time;
-        temp_msg.header.frame_id = "fitzroy_imu";
+        temp_msg.header.frame_id = robot_name + "_imu";
         temp_msg.variance = 0.0; /// 0 is interpreted as variance unknown
         temp_msg.temperature = msg.data[TEMPERATURE];
         pub_temp.publish(temp_msg);
@@ -395,12 +425,22 @@ void watchdogCallback(const ros::TimerEvent&){
     ros::Duration dt=ros::Time::now() - last_time;
     diagnostic_msgs::DiagnosticStatus msg;
     msg.level=diagnostic_msgs::DiagnosticStatus::OK;
-    msg.name="fitzroy_arduino";
+    msg.name=robot_name + "_arduino";
     if(dt.toSec()>cmdvel_timeout){
         /// If we haven't seen a valid message in two seconds, something has gone horribly wrong.
         msg.level=diagnostic_msgs::DiagnosticStatus::ERROR;
     }
     pub_arduino_status.publish(msg);
+}
+
+void sub_cmd_vel(const geometry_msgs::Twist &msg)
+{
+    std_msgs::Float32MultiArray serial_msg;
+    serial_msg.data.resize(TEENSY_IN_ARRSIZE);
+    serial_msg.data[TARGET_PROPEL] = msg.linear.x;
+    serial_msg.data[TARGET_STEER] = twist2angle(msg.angular.z,msg.linear.x);
+    /// \todo add other motors and servos here.
+    pub_to_serial.publish(serial_msg);
 }
 
 int main(int argc, char **argv)
@@ -412,13 +452,16 @@ int main(int argc, char **argv)
 	ros::NodeHandle nh;
 	ros::NodeHandle pnh("~");
 	ros::Subscriber sub_velocity_actual = nh.subscribe("velocity_actual", 1000, sub_actual);
+	ros::Subscriber sub_velocity_target = nh.subscribe("cmd_vel", 1000, sub_cmd_vel);
 
 	/// broadcaster stuff
+	pub_to_serial		= pnh.advertise<std_msgs::Float32MultiArray		>("Velocity_Out", 1);
+
+	/// Sensors
 	pub_odom			= pnh.advertise<nav_msgs::Odometry				>("odom", 1);
 	pub_battery			= pnh.advertise<sensor_msgs::BatteryState		>("battery", 1);
 	pub_5v				= pnh.advertise<std_msgs::Float32				>("logic_voltage", 1);
 	pub_arduino_status  = pnh.advertise<diagnostic_msgs::DiagnosticStatus >("arduino_status", 1);
-	pub_odom			= pnh.advertise<nav_msgs::Odometry				>("odom", 1);
 	pub_gps				= pnh.advertise<sensor_msgs::NavSatFix			>("gps", 1);
 	pub_imu				= pnh.advertise<sensor_msgs::Imu				>("imu", 1);
 	pub_joints			= pnh.advertise<sensor_msgs::JointState			>("joint_states", 1);
@@ -441,6 +484,15 @@ int main(int argc, char **argv)
     pnh.getParam("wheel_base",wheel_base);
     pnh.getParam("rear_wheel_dia",rear_wheel_dia);
     pnh.getParam("front_wheel_dia",front_wheel_dia);
+    pnh.getParam("robot_name",robot_name);
+    pnh.getParam("motor1_name",motor1_name);
+    pnh.getParam("motor2_name",motor2_name);
+    pnh.getParam("motor3_name",motor3_name);
+    pnh.getParam("motor4_name",motor4_name);
+    pnh.getParam("servo1_name",servo1_name);
+    pnh.getParam("servo2_name",servo2_name);
+
+
     pnh.getParam("ir_range_of_detection",ir_range_of_detection);
     pnh.getParam("ir_field_of_view",ir_field_of_view);
 
