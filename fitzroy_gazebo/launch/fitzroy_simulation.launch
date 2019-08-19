@@ -48,6 +48,12 @@
     <param name="publish_frequency" type="double" value="30.0" />
   </node>
 
+  <node pkg="fitzroy_gazebo" type="fitzroy_gazebo_controller" name="fitzroy_gazebo">
+    <param name="rear_wheel_dia" type="double" value="0.064" />
+    <param name="front_wheel_dia" type="double" value="0.064" />
+    <param name="wheel_base" type="double" value="0.137" />
+  </node>
+
   <!-- push robot_description to factory and spawn robot in gazebo  (for yaw add: -Y 3.14) -->
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
         args="-x $(arg robot_x) -y $(arg robot_y) -z $(arg robot_z) -Y $(arg robot_yaw) -urdf -model robot -param robot_description" respawn="false" output="screen"/>
