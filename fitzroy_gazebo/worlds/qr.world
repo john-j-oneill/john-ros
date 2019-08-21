@@ -1,0 +1,657 @@
+<sdf version='1.6'>
+  <world name='default'>
+    <light name='sun' type='directional'>
+      <cast_shadows>1</cast_shadows>
+      <pose frame=''>0 0 10 0 -0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+    <model name='ground_plane'>
+      <static>1</static>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>50</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <bounce/>
+            <contact>
+              <ode/>
+            </contact>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <script>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+              <name>Gazebo/Grey</name>
+            </script>
+          </material>
+        </visual>
+        <velocity_decay>
+          <linear>0</linear>
+          <angular>0</angular>
+        </velocity_decay>
+        <self_collide>0</self_collide>
+        <kinematic>0</kinematic>
+        <gravity>1</gravity>
+        <enable_wind>0</enable_wind>
+      </link>
+    </model>
+    <physics name='default_physics' default='0' type='ode'>
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <scene>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.7 0.7 0.7 1</background>
+      <shadows>1</shadows>
+    </scene>
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <latitude_deg>0</latitude_deg>
+      <longitude_deg>0</longitude_deg>
+      <elevation>0</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+    <gravity>0 0 -9.8</gravity>
+    <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
+    <atmosphere type='adiabatic'/>
+    <wind/>
+    <model name='FitzB01_2'>
+      <static>1</static>
+      <link name='link'>
+        <pose frame=''>0 0 0.1 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://FitzB01/materials/scripts</uri>
+              <uri>model://FitzB01/materials/textures</uri>
+              <name>vrc/FitzB01</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-1.35549 -0.987647 0 0 -0 0</pose>
+    </model>
+    <model name='FitzB02'>
+      <static>1</static>
+      <link name='link'>
+        <pose frame=''>0 0 0.1 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://FitzB02/materials/scripts</uri>
+              <uri>model://FitzB02/materials/textures</uri>
+              <name>vrc/FitzB02</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-1.62674 -0.992263 0 0 -0 0</pose>
+    </model>
+    <model name='FitzB03'>
+      <static>1</static>
+      <link name='link'>
+        <pose frame=''>0 0 0.1 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://FitzB03/materials/scripts</uri>
+              <uri>model://FitzB03/materials/textures</uri>
+              <name>vrc/FitzB03</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-0.062305 -1.59468 0 0 -0 0</pose>
+    </model>
+    <model name='FitzB04'>
+      <static>1</static>
+      <link name='link'>
+        <pose frame=''>0 0 0.1 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://FitzB04/materials/scripts</uri>
+              <uri>model://FitzB04/materials/textures</uri>
+              <name>vrc/FitzB04</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-0.061262 -1.61052 0 0 -0 0</pose>
+    </model>
+    <model name='FitzB05'>
+      <static>1</static>
+      <link name='link'>
+        <pose frame=''>0 0 0.1 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://FitzB05/materials/scripts</uri>
+              <uri>model://FitzB05/materials/textures</uri>
+              <name>vrc/FitzB05</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>0.757457 0.681927 0 0 -0 0</pose>
+    </model>
+    <model name='FitzB06'>
+      <static>1</static>
+      <link name='link'>
+        <pose frame=''>0 0 0.1 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://FitzB06/materials/scripts</uri>
+              <uri>model://FitzB06/materials/textures</uri>
+              <name>vrc/FitzB06</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>0.459417 2.60416 0 0 -0 0</pose>
+    </model>
+    <model name='FitzB07'>
+      <static>1</static>
+      <link name='link'>
+        <pose frame=''>0 0 0.1 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://FitzB07/materials/scripts</uri>
+              <uri>model://FitzB07/materials/textures</uri>
+              <name>vrc/FitzB07</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-0.790275 3.12111 0 0 -0 0</pose>
+    </model>
+    <model name='FitzB08'>
+      <static>1</static>
+      <link name='link'>
+        <pose frame=''>0 0 0.1 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://FitzB08/materials/scripts</uri>
+              <uri>model://FitzB08/materials/textures</uri>
+              <name>vrc/FitzB08</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-2.28322 3.04095 0 0 -0 0</pose>
+    </model>
+    <model name='FitzB09'>
+      <static>1</static>
+      <link name='link'>
+        <pose frame=''>0 0 0.1 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>0.2 0.01 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://FitzB09/materials/scripts</uri>
+              <uri>model://FitzB09/materials/textures</uri>
+              <name>vrc/FitzB09</name>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-3.03997 1.78896 0 0 -0 0</pose>
+    </model>
+    <state world_name='default'>
+      <sim_time>1541 840000000</sim_time>
+      <real_time>1545 990700500</real_time>
+      <wall_time>1566400416 973541806</wall_time>
+      <iterations>1541840</iterations>
+      <model name='FitzB01_2'>
+        <pose frame=''>-1.35549 -0.987647 0 0 0 -0.336876</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-1.35549 -0.987647 0.1 0 0 -0.336876</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='FitzB02'>
+        <pose frame=''>-1.54658 -1.00882 0 0 -0 0.506333</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-1.54658 -1.00882 0.1 0 -0 0.506333</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='FitzB03'>
+        <pose frame=''>-0.062305 1.4074 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-0.062305 1.4074 0.1 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='FitzB04'>
+        <pose frame=''>-0.061262 1.41669 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-0.061262 1.41669 0.1 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='FitzB05'>
+        <pose frame=''>0.757457 0.681927 0 0 -0 1.29416</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>0.757457 0.681927 0.1 0 -0 1.29416</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='FitzB06'>
+        <pose frame=''>0.459417 2.60416 0 0 0 -0.872268</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>0.459417 2.60416 0.1 0 0 -0.872268</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='FitzB07'>
+        <pose frame=''>-0.790275 3.12111 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-0.790275 3.12111 0.1 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='FitzB08'>
+        <pose frame=''>-2.28322 3.04095 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-2.28322 3.04095 0.1 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='FitzB09'>
+        <pose frame=''>-3.03997 1.78896 0 0 -0 1.20201</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>-3.03997 1.78896 0.1 0 -0 1.20201</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='ground_plane'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>0 0 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='robot'>
+        <pose frame=''>-1.50391 1.49744 1.9e-05 0.000312 0.002052 0.01818</pose>
+        <scale>1 1 1</scale>
+        <link name='base_footprint'>
+          <pose frame=''>-1.50391 1.49744 1.9e-05 0.000312 0.002052 0.01818</pose>
+          <velocity>4e-06 0.00022 0.000482 0.008109 -0.000625 -0.000117</velocity>
+          <acceleration>-0.000523 0.006782 -0.021981 -0.31535 0.018698 0.010616</acceleration>
+          <wrench>-0.001351 0.01753 -0.056815 0 -0 0</wrench>
+        </link>
+        <link name='front_axle_left'>
+          <pose frame=''>-1.36793 1.55842 0.03209 -0.000114 0.002052 0.018192</pose>
+          <velocity>-8e-06 1.8e-05 -0.000342 -0.003586 -0.000838 -2.5e-05</velocity>
+          <acceleration>-0.001061 -0.001078 0.015167 0.121054 0.026644 -0.000742</acceleration>
+          <wrench>-1e-06 -1e-06 1.4e-05 0 -0 0</wrench>
+        </link>
+        <link name='front_axle_right'>
+          <pose frame=''>-1.3658 1.44144 0.032104 -0.000112 0.002052 0.018192</pose>
+          <velocity>-2.3e-05 1.6e-05 2.1e-05 -0.003533 -0.000837 -2.5e-05</velocity>
+          <acceleration>0.000158 -0.001 0.001629 0.119091 0.02661 -0.000814</acceleration>
+          <wrench>0 -1e-06 2e-06 0 -0 0</wrench>
+        </link>
+        <link name='left_front_wheel'>
+          <pose frame=''>-1.36793 1.55841 0.031996 2.6e-05 -0.12589 0.018189</pose>
+          <velocity>-8e-06 -1e-06 5.4e-05 4.4e-05 -0.000244 -2.1e-05</velocity>
+          <acceleration>-0.001113 0.000687 -0.000771 -0.008105 -0.034792 -0.000861</acceleration>
+          <wrench>-5.6e-05 3.4e-05 -3.9e-05 0 -0 0</wrench>
+        </link>
+        <link name='left_rear_wheel'>
+          <pose frame=''>-1.50491 1.55592 0.032037 0.000314 0.098799 0.018211</pose>
+          <velocity>-9e-06 -4.2e-05 0.000965 0.007933 -0.001275 -0.000125</velocity>
+          <acceleration>-0.001211 0.004705 -0.040232 -0.244733 -1.28321 0.012153</acceleration>
+          <wrench>-6.1e-05 0.000235 -0.002012 0 -0 0</wrench>
+        </link>
+        <link name='right_front_wheel'>
+          <pose frame=''>-1.3658 1.44143 0.031996 2.8e-05 -0.059744 0.018191</pose>
+          <velocity>-2.3e-05 -3e-06 4.8e-05 8.6e-05 -0.000705 -2e-05</velocity>
+          <acceleration>0.000113 0.00075 -9.8e-05 -0.021378 0.003422 -0.000906</acceleration>
+          <wrench>6e-06 3.8e-05 -5e-06 0 -0 0</wrench>
+        </link>
+        <link name='right_rear_wheel'>
+          <pose frame=''>-1.50278 1.43894 0.031995 9.2e-05 0.013481 0.018183</pose>
+          <velocity>-2.2e-05 -7.9e-05 4e-06 0.002462 -0.000684 -0.000147</velocity>
+          <acceleration>8e-06 0.005167 0.000396 -0.159717 -0.001214 0.004591</acceleration>
+          <wrench>0 0.000258 2e-05 0 -0 0</wrench>
+        </link>
+      </model>
+      <light name='sun'>
+        <pose frame=''>0 0 10 0 -0 0</pose>
+      </light>
+    </state>
+    <gui fullscreen='0'>
+      <camera name='user_camera'>
+        <pose frame=''>0.149394 -7.11887 8.53706 0 0.611642 1.50102</pose>
+        <view_controller>orbit</view_controller>
+        <projection_type>perspective</projection_type>
+      </camera>
+    </gui>
+  </world>
+</sdf>

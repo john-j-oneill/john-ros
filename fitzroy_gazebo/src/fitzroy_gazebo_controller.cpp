@@ -8,10 +8,12 @@
 /// Messages
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/Twist.h>
+#include <sensor_msgs/JointState.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
 #include <std_msgs/Float64.h>
-
+#include <nav_msgs/Odometry.h>
+#include <tf/transform_broadcaster.h>
 
 //now instead of ackermann msgs, we subscribe to the hacky cmd_vel message from teb planner
 
@@ -55,7 +57,9 @@ ros::Publisher left_front_propel_pub;
 ros::Publisher right_front_propel_pub;
 ros::Publisher left_rear_propel_pub;
 ros::Publisher right_rear_propel_pub;
+ros::Publisher odom_pub;
 ros::NodeHandle *nh;
+tf::TransformBroadcaster *odom_broadcaster;
 
 //so we dont redeclare our messages
 std_msgs::Float64 left_steer_msg;
@@ -69,12 +73,12 @@ std_msgs::Float64 right_rear_propel_msg;
 ros::Time last_cmd_time;
 double timeout_cmd_vel = 1.0;
 
-float twist2angle(float twist_rate, float propel_speed)
+double twist2angle(double twist_rate, double propel_speed)
 {
   return std::atan(wheel_base/propel_speed*twist_rate);
 }
 
-float angle2twist(float steering_angle,float propel_speed)
+double angle2twist(double steering_angle,double propel_speed)
 {
   return propel_speed/wheel_base*std::tan(steering_angle);
 }
@@ -109,6 +113,86 @@ void cmdCallback(const geometry_msgs::Twist::ConstPtr& cmd_msg){
     right_rear_propel_pub.publish(right_rear_propel_msg);
 }
 
+double current_x = 0.f;
+double current_y = 0.f;
+double current_th = 0.f;
+ros::Time previous_time;
+void propogate(double dt,double propel_speed, double twist_rate)
+{
+    /// Propagate the robot using basic odom
+    current_x += propel_speed*cos(current_th) * dt;
+    current_y += propel_speed*sin(current_th) * dt;
+    current_th += twist_rate * dt;
+}
+void feedbackCallback(const sensor_msgs::JointState::ConstPtr& fbk_msg)
+{
+    double propel_speed = NAN;
+    double steer_fbk = NAN;
+    ros::Time current_time = fbk_msg->header.stamp;
+    for(size_t idx=0;idx<fbk_msg->name.size() &&
+                     idx<fbk_msg->velocity.size() &&
+                     idx<fbk_msg->position.size();idx++)
+    {
+        if(fbk_msg->name[idx]=="rear_axle_to_left_wheel")
+        {
+            propel_speed = fbk_msg->velocity[idx];
+        }
+        if(fbk_msg->name[idx]=="base_link_to_front_axle_left")
+        {
+            steer_fbk = fbk_msg->position[idx];
+        }
+    }
+    if(!isnan(propel_speed) && !isnan(steer_fbk))
+    {
+        double twist_rate = angle2twist(steer_fbk,propel_speed);
+        double dt = (current_time - previous_time).toSec();
+        if(dt<1.0 && dt>0.0){
+            propogate(dt,propel_speed,twist_rate);
+
+
+            //Now setup all the odom nodes
+            //since all odometry is 6DOF we'll need a quaternion created from yaw
+            geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(current_th);
+
+            //first, we'll publish the transform over tf
+            geometry_msgs::TransformStamped odom_trans;
+            odom_trans.header.stamp = current_time;
+            odom_trans.header.frame_id = "odom";
+            odom_trans.child_frame_id = "base_footprint";
+
+            odom_trans.transform.translation.x = current_x;
+            odom_trans.transform.translation.y = current_y;
+            odom_trans.transform.translation.z = 0.0;
+            odom_trans.transform.rotation = odom_quat;
+
+            //send the transform
+            odom_broadcaster->sendTransform(odom_trans);
+
+            //next, we'll publish the odometry message over ROS
+            nav_msgs::Odometry odom;
+            odom.header.stamp = current_time;
+            odom.header.frame_id = "odom";
+
+            //set the position
+            odom.pose.pose.position.x = current_x;
+            odom.pose.pose.position.y = current_y;
+            odom.pose.pose.position.z = 0.0;
+            odom.pose.pose.orientation = odom_quat;
+
+            //set the velocity
+            odom.child_frame_id = "base_link";
+            odom.twist.twist.linear.x = propel_speed;
+            odom.twist.twist.linear.y = 0.0;
+            odom.twist.twist.angular.z = twist_rate;
+
+            //publish the odom message
+            odom_pub.publish(odom);
+
+        }
+        previous_time = current_time;
+    }
+}
+
 //zero velocities if we haven't received a cmd in a while
 void timercallback(const ros::TimerEvent&)
 {
@@ -140,6 +224,7 @@ int main (int argc, char** argv)
     /// Initialize ROS
     ros::init (argc, argv, "ackermann_steering_controller");
     nh = new ros::NodeHandle("~");
+    odom_broadcaster = new tf::TransformBroadcaster;
 
     //get some params set in our launch file
     nh->getParam("rear_wheel_dia", rear_wheel_dia);
@@ -164,9 +249,11 @@ int main (int argc, char** argv)
     left_rear_propel_pub = nh->advertise<std_msgs::Float64>("/left_rear_axle_ctrlr/command", 1);
     right_rear_propel_pub = nh->advertise<std_msgs::Float64>("/right_rear_axle_ctrlr/command", 1);
 
+    odom_pub = nh->advertise<nav_msgs::Odometry>("/odom", 1);
+
     // subscribe to teb planner
-    ros::Subscriber ackermannSub;
-    ackermannSub = nh->subscribe("/cmd_vel",1, cmdCallback);
+    ros::Subscriber ackermannSub = nh->subscribe("/cmd_vel",1, cmdCallback);
+    ros::Subscriber feedbackSub = nh->subscribe("/joint_states",1, feedbackCallback);
 
     //timout checker
     last_cmd_time = ros::Time::now();

@@ -11,7 +11,7 @@
   <arg name="headless" default="false"/>
   <arg name="debug" default="false"/>
   <arg name="model" default="$(find fitzroy_description)/urdf/fitzroy.urdf.xacro" />
-  <arg name="world_name" default="worlds/empty.world"/>
+  <arg name="world_name" default="$(find fitzroy_gazebo)/worlds/qr.world"/>
   <arg name="robot_x" default="-1.5"/>
   <arg name="robot_y" default="1.5"/>
   <arg name="robot_z" default="0.1"/>
@@ -23,6 +23,7 @@
   <!-- <arg name="world_name" default="$(find northstar_gazebo)/worlds/simpleworld1.world"/> -->
   <!-- <arg name="world_name" default="$(find husky_gazebo)/worlds/clearpath_playpen.world"/> -->
   <!-- <arg name="world_name" default="$(find husky_demo)/worlds/test100xa.world"/> -->
+  <!-- <arg name="world_name" default="worlds/empty.world"/> -->
 
   <!-- Create the world. -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">

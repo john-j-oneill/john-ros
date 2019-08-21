@@ -153,9 +153,9 @@ void publish_landmark_tf(const ros::TimerEvent&)
     /// Loop through all of the features in the entire state vector to figure out if you have seen the feature previously
     for(int ii = 0; ii<num_features;ii++){
         geometry_msgs::TransformStamped robot_pose;
-        robot_pose.header.stamp = current_time;
+        robot_pose.header.stamp = ros::Time::now();
         robot_pose.header.frame_id = world_frame; //!< the solid world coordinate frame that our state is in
-        robot_pose.child_frame_id = landmark_ids.at(ii); //!< the name of the landmark is the QR Text
+        robot_pose.child_frame_id = "ekf/"+landmark_ids.at(ii); //!< the name of the landmark is the QR Text
         robot_pose.transform.translation.x=state[ROBOT_SIZE+ii*LANDMARK_SIZE+LANDMARK_X];
         robot_pose.transform.translation.y=state[ROBOT_SIZE+ii*LANDMARK_SIZE+LANDMARK_Y];
 
@@ -663,7 +663,7 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& odom){
         geometry_msgs::TransformStamped robot_pose;
         robot_pose.header.stamp = current_time;
         robot_pose.header.frame_id = world_frame; //!< the solid world coordinate frame that our state is in
-        robot_pose.child_frame_id = "ekf_base_link"; //!< the frame of the robot that is the first 3 elements of the state vector
+        robot_pose.child_frame_id = "ekf/base_link"; //!< the frame of the robot that is the first 3 elements of the state vector
         robot_pose.transform.translation.x=state[ROBOT_X];
         robot_pose.transform.translation.y=state[ROBOT_Y];
 

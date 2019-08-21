@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <sdf version="1.5">
-  <model name="RonnyLM">
+  <model name="FitzB07">
     <static>true</static>
     <link name="link">
       <pose>0 0 0.1 0 0 0</pose>
@@ -20,9 +20,9 @@
         </geometry>
         <material>
           <script>
-            <uri>model://RonnyLM/materials/scripts</uri>
-            <uri>model://RonnyLM/materials/textures</uri>
-            <name>vrc/RonnyLM</name>
+            <uri>model://FitzB07/materials/scripts</uri>
+            <uri>model://FitzB07/materials/textures</uri>
+            <name>vrc/FitzB07</name>
           </script>
         </material>
       </visual>

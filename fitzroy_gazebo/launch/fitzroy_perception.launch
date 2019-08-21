@@ -1,11 +1,29 @@
 <launch>
   <!-- Look for qr codes as landmarks. -->
   <node name="Waterloo" pkg="cv_barcode" type="cv_barcode_node" >
-    
+    <remap from="image" to="/camera/image_raw" />
+    <remap from="/qrcode_trans" to="/landmark" />
+    <!-- Publish out the image with the QR code(s) highlighted. 
+         Will slow things down, but useful for debugging. 
+         TODO: check to see if actually slower if no one subscribed anyways? -->
+    <param name="publish_image" value="true" />
+    <!-- Use cv::imshow to display the image to the user. 
+         Will slow things down, and not very rossy, but useful for debugging. -->
+    <param name="display_image" value="false" />
+    <!-- This is an ugly hack to use pose msgs. Not great. -->
+    <param name="qr_text_in_frameid" value="false" />
+    <!-- Output debug text -->
+    <param name="debug" value="false" />
+    <!-- This is a list of prefixes and their corresponding sizes -->
+    <rosparam param="qr_real_width_map">
+     FitzA: 0.056
+     FitzB: 0.175
+    </rosparam>
   </node>
 
   <!-- EKF that keeps track of the robot's position as well as that of landmarks it has seen. -->
   <node name="Euston" pkg="slam_ekf_2d" type="slam_ekf_2d_node" >
+    <param name="world_frame" value="ekf/map" />
     
   </node>
 
