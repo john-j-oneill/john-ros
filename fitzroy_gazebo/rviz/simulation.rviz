@@ -117,48 +117,47 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        base_footprint:
-          base_link:
-            chassis:
-              camera_link:
-                camera_link_optical:
-                  FitzB05:
-                    {}
-              front_axle_left:
-                left_front_wheel:
-                  {}
-              front_axle_right:
-                right_front_wheel:
-                  {}
-              left_arm:
-                fork_assembly:
-                  fork_backstop:
-                    {}
-                  left_fork:
-                    {}
-                  right_fork:
-                    {}
-              right_arm:
-                {}
-              ultrasonic_link:
-                ultrasonic_speakers_link:
-                  {}
-            gps_link:
-              {}
-            imu_link:
-              {}
-            rear_axle:
-              left_rear_wheel:
-                {}
-              right_rear_wheel:
-                {}
         ekf/map:
           ekf/FitzB05:
             {}
           ekf/base_link:
             {}
-        odom:
-          {}
+          odom:
+            base_footprint:
+              base_link:
+                chassis:
+                  camera_link:
+                    camera_link_optical:
+                      FitzB05:
+                        {}
+                  front_axle_left:
+                    left_front_wheel:
+                      {}
+                  front_axle_right:
+                    right_front_wheel:
+                      {}
+                  left_arm:
+                    fork_assembly:
+                      fork_backstop:
+                        {}
+                      left_fork:
+                        {}
+                      right_fork:
+                        {}
+                  right_arm:
+                    {}
+                  ultrasonic_link:
+                    ultrasonic_speakers_link:
+                      {}
+                gps_link:
+                  {}
+                imu_link:
+                  {}
+                rear_axle:
+                  left_rear_wheel:
+                    {}
+                  right_rear_wheel:
+                    {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -319,6 +318,126 @@ Visualization Manager:
       Topic: /qrcodes
       Unreliable: true
       Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: PointCloud
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.00999999978
+      Style: Flat Squares
+      Topic: /map_features
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud
+      Color: 0; 12; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: PointCloud
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.00999999978
+      Style: Flat Squares
+      Topic: /robot_state
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: PointCloud
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.00999999978
+      Style: Flat Squares
+      Topic: /ellipse_vis_feature
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud
+      Color: 1; 18; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: PointCloud
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.00999999978
+      Style: Flat Squares
+      Topic: /ellipse_vis_robot
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -344,7 +463,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.42822146
+      Distance: 1.74033558
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
@@ -359,10 +478,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.309797883
+      Pitch: 0.724798322
       Target Frame: Robot_Ground_Truth
       Value: Orbit (rviz)
-      Yaw: 2.80654931
+      Yaw: 2.38655186
     Saved: ~
 Window Geometry:
   Displays:

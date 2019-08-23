@@ -508,17 +508,42 @@ double get_yaw(geometry_msgs::Transform trans)
     return yaw;
 }
 
+double get_yaw(geometry_msgs::Pose trans)
+{
+    tf::Quaternion q(
+        trans.orientation.x,
+        trans.orientation.y,
+        trans.orientation.z,
+        trans.orientation.w);
+    tf::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    return yaw;
+}
+
 /// Callback function for receiving a point feature
 void featureCallback(const geometry_msgs::TransformStamped::ConstPtr& feature){
     /// \todo This should be transformed into base_link frame if it is not already. But R_mapped expects distance/bearing measurements, so be careful with that.
 
+    geometry_msgs::PoseStamped pose_in,pose_out;
+    pose_in.header = feature->header;
+    pose_in.pose.position.x = feature->transform.translation.x;
+    pose_in.pose.position.y = feature->transform.translation.y;
+    pose_in.pose.position.z = feature->transform.translation.z;
+    pose_in.pose.orientation.x = feature->transform.rotation.x;
+    pose_in.pose.orientation.y = feature->transform.rotation.y;
+    pose_in.pose.orientation.z = feature->transform.rotation.z;
+    pose_in.pose.orientation.w = feature->transform.rotation.w;
+    listener->transformPose("base_footprint",pose_in,pose_out);
+
     /// Get the point from each feature detected
     geometry_msgs::Point32 pt;
 
-    pt.x = feature->transform.translation.x;
-    pt.y = feature->transform.translation.y;
+    pt.x = pose_out.pose.position.x;
+    pt.y = pose_out.pose.position.y;
     /// Get the orientation of the feature
-    float phi = get_yaw(feature->transform);
+    float phi = get_yaw(pose_out.pose);
+
     std::string id = feature->child_frame_id;
 
     /// Check feature in map
