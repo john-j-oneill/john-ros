@@ -149,12 +149,12 @@ void propogate(float dt,float propel_speed, float twist_rate)
     current_th += twist_rate * dt;
 }
 
-float twist2angle(float twist_rate, float propel_speed)
+double twist2angle(double twist_rate, double propel_speed)
 {
   return std::atan(wheel_base/propel_speed*twist_rate);
 }
 
-float angle2twist(float steering_angle,float propel_speed)
+double angle2twist(double steering_angle,double propel_speed)
 {
   return propel_speed/wheel_base*std::tan(steering_angle);
 }
@@ -167,9 +167,9 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         static tf::TransformBroadcaster odom_broadcaster;
 
 		//compute the odoms
-		float propel_speed = msg.data[PROPEL];
-		float steering_angle = msg.data[STEER];
-		float twist_rate = angle2twist(steering_angle, propel_speed);
+        double propel_speed = msg.data[PROPEL] * rear_wheel_dia / 2.0;
+        double steering_angle = msg.data[STEER];
+        double twist_rate = angle2twist(steering_angle, propel_speed);
 		propogate((current_time - last_time).toSec(),propel_speed,twist_rate);
 
 		//Now setup all the odom nodes
@@ -285,7 +285,7 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         range_msg.header.stamp = current_time;
         range_msg.field_of_view = us_field_of_view;
         range_msg.range = msg.data[ULTRASONIC];
-        pub_ir_3.publish(range_msg);
+        pub_ultrasonic.publish(range_msg);
     }
     if(msg.data.size()>AUX_1){
         sensor_msgs::Range range_msg;
@@ -437,7 +437,7 @@ void sub_cmd_vel(const geometry_msgs::Twist &msg)
 {
     std_msgs::Float32MultiArray serial_msg;
     serial_msg.data.resize(TEENSY_IN_ARRSIZE);
-    serial_msg.data[TARGET_PROPEL] = msg.linear.x;
+    serial_msg.data[TARGET_PROPEL] = msg.linear.x / (rear_wheel_dia / 2.0);
     serial_msg.data[TARGET_STEER] = twist2angle(msg.angular.z,msg.linear.x);
     /// \todo add other motors and servos here.
     pub_to_serial.publish(serial_msg);
@@ -455,25 +455,25 @@ int main(int argc, char **argv)
 	ros::Subscriber sub_velocity_target = nh.subscribe("cmd_vel", 1000, sub_cmd_vel);
 
 	/// broadcaster stuff
-	pub_to_serial		= pnh.advertise<std_msgs::Float32MultiArray		>("Velocity_Out", 1);
+    pub_to_serial		= nh.advertise<std_msgs::Float32MultiArray		>("Velocity_Out", 1);
 
 	/// Sensors
-	pub_odom			= pnh.advertise<nav_msgs::Odometry				>("odom", 1);
-	pub_battery			= pnh.advertise<sensor_msgs::BatteryState		>("battery", 1);
-	pub_5v				= pnh.advertise<std_msgs::Float32				>("logic_voltage", 1);
-	pub_arduino_status  = pnh.advertise<diagnostic_msgs::DiagnosticStatus >("arduino_status", 1);
-	pub_gps				= pnh.advertise<sensor_msgs::NavSatFix			>("gps", 1);
-	pub_imu				= pnh.advertise<sensor_msgs::Imu				>("imu", 1);
-	pub_joints			= pnh.advertise<sensor_msgs::JointState			>("joint_states", 1);
-	pub_temp			= pnh.advertise<sensor_msgs::Temperature		>("temperature", 1);
+    pub_odom			= nh.advertise<nav_msgs::Odometry				>("odom", 1);
+    pub_battery			= nh.advertise<sensor_msgs::BatteryState		>("battery", 1);
+    pub_5v				= nh.advertise<std_msgs::Float32				>("logic_voltage", 1);
+    pub_arduino_status  = nh.advertise<diagnostic_msgs::DiagnosticStatus >("arduino_status", 1);
+    pub_gps				= nh.advertise<sensor_msgs::NavSatFix			>("gps", 1);
+    pub_imu				= nh.advertise<sensor_msgs::Imu                 >("imu", 1);
+    pub_joints			= nh.advertise<sensor_msgs::JointState			>("joint_states", 1);
+    pub_temp			= nh.advertise<sensor_msgs::Temperature         >("temperature", 1);
 
 	/// Range messages
-	pub_tof_1			= pnh.advertise<sensor_msgs::Range				>("tof_1", 1);
-	pub_tof_2			= pnh.advertise<sensor_msgs::Range				>("tof_2", 1);
-	pub_ultrasonic		= pnh.advertise<sensor_msgs::Range				>("ultrasonic", 1);
-	pub_ir_1			= pnh.advertise<sensor_msgs::Range				>("pub_ir_1", 1);
-	pub_ir_2			= pnh.advertise<sensor_msgs::Range				>("pub_ir_2", 1);
-	pub_ir_3			= pnh.advertise<sensor_msgs::Range				>("pub_ir_3", 1);
+    pub_tof_1			= nh.advertise<sensor_msgs::Range				>("tof_1", 1);
+    pub_tof_2			= nh.advertise<sensor_msgs::Range				>("tof_2", 1);
+    pub_ultrasonic		= nh.advertise<sensor_msgs::Range				>("ultrasonic", 1);
+    pub_ir_1			= nh.advertise<sensor_msgs::Range				>("pub_ir_1", 1);
+    pub_ir_2			= nh.advertise<sensor_msgs::Range				>("pub_ir_2", 1);
+    pub_ir_3			= nh.advertise<sensor_msgs::Range				>("pub_ir_3", 1);
 
 	ros::Timer timer = nh.createTimer(ros::Duration(1.0), watchdogCallback);
 

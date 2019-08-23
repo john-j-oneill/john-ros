@@ -1,0 +1,15 @@
+<launch>
+  <!-- Look for qr codes as landmarks. -->
+  <node name="Paddington" pkg="fitzroy_driver" type="fitzroy_driver_node" output="screen" >
+    <remap from="velocity_actual" to="/velocity_actual" />
+    <remap from="Velocity_Out" to="/velocity_command" />
+  </node>
+
+  <node name="KingsCross" pkg="rosserial_python" type="serial_node.py" >
+    <param name="port" value="/dev/ttyACM0" />
+    <param name="baud" value="115200" />
+    
+  </node>
+
+</launch>
+
