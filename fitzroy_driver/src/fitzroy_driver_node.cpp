@@ -151,7 +151,7 @@ void propogate(float dt,float propel_speed, float twist_rate)
 
 double twist2angle(double twist_rate, double propel_speed)
 {
-  return std::atan(wheel_base/propel_speed*twist_rate);
+  return std::atan2(wheel_base*twist_rate,propel_speed);
 }
 
 double angle2twist(double steering_angle,double propel_speed)
