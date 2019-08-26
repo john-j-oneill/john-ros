@@ -4,12 +4,13 @@
     <remap from="velocity_actual" to="/velocity_actual" />
     <remap from="Velocity_Out" to="/velocity_command" />
   </node>
+  <!--  Connect to Arduino -->
   <node name="KingsCross" pkg="rosserial_python" type="serial_node.py" output="screen" >
     <param name="port" value="/dev/ttyAMA0" />
     <param name="baud" value="57600" />
     
   </node>
-  <!--  Connect to Arduino -->
+  <!--  Connect to Arduino with C node -->
 <!--
   <node pkg="rosserial_server" type="serial_node" name="serial_node" output="screen">
     <param name="port" value="/dev/ttyAMA0"/>
@@ -17,6 +18,11 @@
   </node>
   <node pkg="rosserial_python" type="message_info_service.py" name="rosserial_message_info" />
 -->
+
+  <!-- Raspberry Pi Camera V2 -->
+  <include file="$(find raspicam_node)/launch/camerav2_1280x960_10fps.launch">
+    <arg name="enable_raw" value="true"/>
+  </include>
 
 </launch>
 
