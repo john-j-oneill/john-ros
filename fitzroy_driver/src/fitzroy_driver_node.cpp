@@ -23,15 +23,18 @@
 /////////////// is limited in the message types it supports,    ////////////////////////////////
 /////////////// and partly to save bandwidth & processing.      ////////////////////////////////
 /////////////// As much as possible, they are in standard units ////////////////////////////////
-enum array_indices_teensy_out{
-    PROPEL,     /// In radians/sec
-    STEER,		/// In radians
-    DTIME,		/// For integration
+enum array_indices_teensy_out_v1{
+    PROTOCOL_VERSION, /// This should be incremented for future versions so we can know if we are in agreement with the Arduino
+    PROPEL,     /// In radians/sec.  Redundant to a motor, but it makes it a little easier if they are explicit?
+    STEER,		/// In radians       Redundant to a motor, but it makes it a little easier if they are explicit?
+    DTIME,		/// For integration  Redundant
     VOLT_BAT,	/// Battery state
     VOLT_5V,	/// Maybe a battery state msg?
     TOF_1,		/// Range
     TOF_2,		/// Range
-    ULTRASONIC,	/// Range
+    TOF_3,		/// Range
+    US_1,       /// Range
+    US_2,       /// Range
     AUX_1,		/// Could be IR range sensor? \todo use param to tell what it actually is.
     AUX_2,		/// Could be IR range sensor? \todo use param to tell what it actually is.
     AUX_3,		/// Could be IR range sensor? \todo use param to tell what it actually is.
@@ -43,13 +46,17 @@ enum array_indices_teensy_out{
     IMU_ROT_Y,
     IMU_ROT_Z,
 /// The GPS goes into a NavSatFix message
-    GPS_LAT,
-    GPS_LON,
+    GPS_LAT,    /// Degrees
+    GPS_LON,    /// Degrees
+    GPS_ALT,    /// Meters
+    GPS_HDOP,   /// Unitless, 1.0 means best, bigger means worse
+    GPS_COG,    /// Degrees
+    GPS_SOG,    /// m/s
 /// These could be redundant to propel/steer but are all here for completeness
 /// They will all be packed into one JointState message
-    MOT1_POS,
-    MOT1_VEL,
-    MOT1_EFT,
+    MOT1_POS,   /// Radians or meters
+    MOT1_VEL,   /// Rad/s or m/s
+    MOT1_EFT,   /// Should be Nm or N, but will just be PWM %
     MOT2_POS,
     MOT2_VEL,
     MOT2_EFT,
@@ -107,8 +114,8 @@ float tof_min_range = 0.03;
 float tof_max_range = 2.00;
 
 float max_batt_voltage = 12.7; // VDC
-float min_batt_voltage = 11.5; // VDC
-float no_batt_voltage  = 6.0;  // VDC
+float min_batt_voltage = -11.5; // VDC
+float no_batt_voltage  = -6.0;  // VDC
 
 float cmdvel_timeout = 2.0;
 float gps_x_cov = 1.0;
@@ -131,7 +138,9 @@ ros::Publisher pub_temp;
 /// Range messages
 ros::Publisher pub_tof_1;
 ros::Publisher pub_tof_2;
-ros::Publisher pub_ultrasonic;
+ros::Publisher pub_tof_3;
+ros::Publisher pub_us_1;
+ros::Publisher pub_us_2;
 ros::Publisher pub_ir_1;
 ros::Publisher pub_ir_2;
 ros::Publisher pub_ir_3;
@@ -276,16 +285,38 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         range_msg.range = msg.data[TOF_2];
         pub_tof_2.publish(range_msg);
     }
-    if(msg.data.size()>ULTRASONIC){
+    if(msg.data.size()>TOF_3){
+        sensor_msgs::Range range_msg;
+        range_msg.radiation_type = 2; /// Only options are IR and US, so for TOF I just picked something that isn't those two.
+        range_msg.min_range = tof_min_range;
+        range_msg.max_range = tof_max_range;
+        range_msg.header.frame_id = robot_name + "_tof3";
+        range_msg.header.stamp = current_time;
+        range_msg.field_of_view = tof_field_of_view;
+        range_msg.range = msg.data[TOF_3];
+        pub_tof_3.publish(range_msg);
+    }
+    if(msg.data.size()>US_1){
         sensor_msgs::Range range_msg;
         range_msg.radiation_type = sensor_msgs::Range::ULTRASOUND;
         range_msg.min_range = us_min_range;
         range_msg.max_range = us_max_range;
-        range_msg.header.frame_id = robot_name + "_us";
+        range_msg.header.frame_id = robot_name + "_us1";
         range_msg.header.stamp = current_time;
         range_msg.field_of_view = us_field_of_view;
-        range_msg.range = msg.data[ULTRASONIC];
-        pub_ultrasonic.publish(range_msg);
+        range_msg.range = msg.data[US_1];
+        pub_us_1.publish(range_msg);
+    }
+    if(msg.data.size()>US_2){
+        sensor_msgs::Range range_msg;
+        range_msg.radiation_type = sensor_msgs::Range::ULTRASOUND;
+        range_msg.min_range = us_min_range;
+        range_msg.max_range = us_max_range;
+        range_msg.header.frame_id = robot_name + "_us2";
+        range_msg.header.stamp = current_time;
+        range_msg.field_of_view = us_field_of_view;
+        range_msg.range = msg.data[US_2];
+        pub_us_2.publish(range_msg);
     }
     if(msg.data.size()>AUX_1){
         sensor_msgs::Range range_msg;
@@ -363,8 +394,13 @@ void sub_actual(const std_msgs::Float32MultiArray& msg)
         }
         /// The ublox neo-6m is gps only
         gps_msg.status.service = sensor_msgs::NavSatStatus::SERVICE_GPS;
-        gps_msg.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
-        gps_msg.altitude = std::numeric_limits<double>::quiet_NaN();
+        gps_msg.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
+        double usual_error = 2.0; // meters. Wild guess.
+        double cov = std::pow(usual_error * msg.data[GPS_HDOP],2.0);
+        gps_msg.position_covariance[0] = cov;
+        gps_msg.position_covariance[4] = cov;
+        gps_msg.position_covariance[8] = cov;
+        gps_msg.altitude = msg.data[GPS_ALT];
         gps_msg.latitude = msg.data[GPS_LAT];
         gps_msg.longitude = msg.data[GPS_LON];
         pub_gps.publish(gps_msg);
@@ -468,9 +504,11 @@ int main(int argc, char **argv)
     pub_temp			= nh.advertise<sensor_msgs::Temperature         >("temperature", 1);
 
 	/// Range messages
-    pub_tof_1			= nh.advertise<sensor_msgs::Range				>("tof_1", 1);
-    pub_tof_2			= nh.advertise<sensor_msgs::Range				>("tof_2", 1);
-    pub_ultrasonic		= nh.advertise<sensor_msgs::Range				>("ultrasonic", 1);
+	pub_tof_1			= nh.advertise<sensor_msgs::Range				>("tof_1", 1);
+	pub_tof_2			= nh.advertise<sensor_msgs::Range				>("tof_2", 1);
+	pub_tof_3			= nh.advertise<sensor_msgs::Range				>("tof_3", 1);
+	pub_us_1    		= nh.advertise<sensor_msgs::Range				>("ultrasonic_1", 1);
+	pub_us_2    		= nh.advertise<sensor_msgs::Range				>("ultrasonic_2", 1);
     pub_ir_1			= nh.advertise<sensor_msgs::Range				>("pub_ir_1", 1);
     pub_ir_2			= nh.advertise<sensor_msgs::Range				>("pub_ir_2", 1);
     pub_ir_3			= nh.advertise<sensor_msgs::Range				>("pub_ir_3", 1);
