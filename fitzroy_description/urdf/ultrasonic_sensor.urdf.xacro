@@ -2,12 +2,6 @@
 
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-	<material name="ultrasonic_pcb_color">
-		<color rgba="0 0.6 0 1"/>
-	</material>
-	<material name="ultrasonic_speaker_color">
-		<color rgba="0.3 0.3 0.3 1"/>
-	</material>
 
   <xacro:macro name="ultrasonic_sensor" params="name parent *origin ros_topic:=ultrasonic_sensor update_rate:=15 min_range:=0.02 max_range:=4.0 field_of_view:=0.2617993878 ray_count:=10 resolution:=0.001 gaussian_noise:=0.010">
     <xacro:property name="dimx" value="0.015"/>
@@ -18,19 +12,26 @@
     <xacro:property name="speaker_spacing" value="0.027"/>
     <xacro:property name="speaker_diameter" value="0.016"/>
     
+		<material name="${name}_pcb_color">
+			<color rgba="0 0.6 0 1"/>
+		</material>
+		<material name="${name}_speaker_color">
+			<color rgba="0.3 0.3 0.3 1"/>
+		</material>
+
     <joint name="${name}_joint" type="fixed">
       <xacro:insert_block name="origin" />
       <parent link="${parent}"/>
-      <child link="${name}_link"/>
+      <child link="${name}"/>
     </joint>
 
-    <link name="${name}_link">
+    <link name="${name}">
       <visual>
         <origin xyz="${-dimx/2 + pcb_thickness/2} 0 0" rpy="0 0 0" />
         <geometry>
           <box size="${pcb_thickness} ${dimy} ${dimz}" />
         </geometry>
-			  <material name="ultrasonic_pcb_color"/>
+			  <material name="${name}_pcb_color"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0" />
@@ -51,7 +52,7 @@
     <!-- This could/should be done with multiple visual tags in the link, but that's broken in rviz:
          https://answers.ros.org/question/154816/color-issue-with-urdf-and-multiple-visual-tags/ -->
     <joint name="${name}_speakers_joint" type="fixed">
-      <parent link="${name}_link"/>
+      <parent link="${name}"/>
       <child link="${name}_speakers_link"/>
     </joint>
 
@@ -62,7 +63,7 @@
           <!-- 0.99 to avoid Z fighting -->
           <cylinder length="${dimx*0.99}" radius="${speaker_diameter/2}"/>
         </geometry>
-			  <material name="ultrasonic_speaker_color"/>
+			  <material name="${name}_speaker_color"/>
       </visual>
       <visual>
         <origin xyz="0 ${-speaker_spacing/2} 0" rpy="0 1.57079632679 0" />
@@ -70,18 +71,18 @@
           <!-- 0.99 to avoid Z fighting -->
           <cylinder length="${dimx*0.99}" radius="${speaker_diameter/2}"/>
         </geometry>
-			  <material name="ultrasonic_speaker_color"/>
+			  <material name="${name}_speaker_color"/>
       </visual>
       <visual>
         <origin xyz="${-dimx/2 + pcb_thickness*2} 0 ${dimz * 0.3}" rpy="0 0 0" />
         <geometry>
           <box size="${pcb_thickness*2} ${pcb_thickness*5} ${pcb_thickness*2}" />
         </geometry>
-			  <material name="ultrasonic_speaker_color"/>
+			  <material name="${name}_speaker_color"/>
       </visual>
     </link>
 
-    <gazebo reference="${name}_link">
+    <gazebo reference="${name}">
       <sensor type="ray" name="${name}">
         <always_on>true</always_on>
         <update_rate>${update_rate}</update_rate>
@@ -112,7 +113,7 @@
         <plugin name="gazebo_ros_${name}_controller" filename="libhector_gazebo_ros_sonar.so">
           <gaussianNoise>${gaussian_noise}</gaussianNoise>
           <topicName>${ros_topic}</topicName>
-          <frameId>${name}_link</frameId>
+          <frameId>${name}</frameId>
         </plugin>
       </sensor>
     </gazebo>

@@ -568,16 +568,16 @@
 	<!-- Setup a fake IMU sensor -->
   <joint name="imu_joint" type="fixed">
     <parent link="base_link"/>
-    <child link="imu_link"/>
+    <child link="fitzroy_imu"/>
   </joint>
-	<link name="imu_link">
+	<link name="fitzroy_imu">
 	</link>
 	<gazebo>
 		<!-- Old IMU plugin messes with frame_id: dont use libgazebo_ros_imu.so-->
     <plugin name="imu_plugin" filename="libhector_gazebo_ros_imu.so">
         <alwaysOn>true</alwaysOn>
-        <bodyName>imu_link</bodyName>
-				<frameId>imu_link</frameId> <!-- 'frameId' not 'frameName'-->
+        <bodyName>fitzroy_imu</bodyName>
+				<frameId>fitzroy_imu</frameId> <!-- 'frameId' not 'frameName'-->
         <topicName>imu/data</topicName>
         <serviceName>imu/service</serviceName>
         <gaussianNoise>0.001</gaussianNoise>
@@ -593,8 +593,23 @@
 
 	<!-- Ultrasonic -->
   <xacro:include filename="$(find fitzroy_description)/urdf/ultrasonic_sensor.urdf.xacro"/>
-  <ultrasonic_sensor parent="chassis" name="ultrasonic">
+  <ultrasonic_sensor parent="chassis" name="fitzroy_us1">
     <origin xyz="${-(wheelbase/2 + rackback)} 0.020 ${rackheight}" rpy="0 0 0"/>
+  </ultrasonic_sensor>
+	<!-- Ultrasonic -->
+  <xacro:include filename="$(find fitzroy_description)/urdf/ultrasonic_sensor.urdf.xacro"/>
+  <ultrasonic_sensor parent="chassis" name="fitzroy_us2">
+    <origin xyz="${-(wheelbase/2 + rackback)} -0.020 ${rackheight}" rpy="0 0 0"/>
+  </ultrasonic_sensor>
+	<!-- TOF Rev -->
+  <xacro:include filename="$(find fitzroy_description)/urdf/ultrasonic_sensor.urdf.xacro"/>
+  <ultrasonic_sensor parent="chassis" name="fitzroy_tof1">
+    <origin xyz="${-(wheelbase/2 + rackback)} 0 ${rackheight - 0.02}" rpy="0 0 ${pi}"/>
+  </ultrasonic_sensor>
+	<!-- TOF Fwd -->
+  <xacro:include filename="$(find fitzroy_description)/urdf/ultrasonic_sensor.urdf.xacro"/>
+  <ultrasonic_sensor parent="chassis" name="fitzroy_tof2">
+    <origin xyz="${-(wheelbase/2 + rackback)} 0 ${rackheight - 0.02}" rpy="0 0 0"/>
   </ultrasonic_sensor>
 
 </robot>

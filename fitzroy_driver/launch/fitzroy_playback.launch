@@ -1,0 +1,40 @@
+<launch>
+	<arg name = "bagdir"  default="/home/ubuntu/Downloads/bagfiles/"/>
+	<arg name = "bagfile" default="Fitzroy_2019-09-05-20-25-01.bag"/>
+	<arg name = "model"   default="$(find fitzroy_description)/urdf/fitzroy.urdf.xacro"/>
+  <arg name = "rviz"    default="true"/>
+  <arg name = "require" default="false"/>
+  <arg name = "rate"    default="1.0"/>
+
+  <!-- Look for qr codes as landmarks. -->
+  <node name="Paddington" pkg="fitzroy_driver" type="fitzroy_driver_node" output="screen" >
+    <remap from="velocity_actual" to="/velocity_actual" />
+    <remap from="Velocity_Out" to="/velocity_command" />
+  </node>
+
+  <!-- Republish as compressed for bagging -->
+  <node pkg="image_transport" type="republish" name="$(anon repub)" args="compressed raw">
+		<remap from="in"  to="/raspicam_node/image"/>
+    <remap from="out" to="/raspicam_node/image"/>
+  </node>
+
+
+  <node pkg="rosbag" type="play" name="rosbag_play" required="$(arg require)"
+        args=" $(arg bagdir)$(arg bagfile) -r $(arg rate) -d 0.5"
+  />
+
+  <!-- RViz output="screen" -->
+  <node if="$(arg rviz)" pkg="rviz" type="rviz" name="$(anon rviz)" respawn="false" output="screen" args="-d $(find fitzroy_description)/rviz/fitzroy.rviz" /> 
+
+	<!--  Default to our urdf file: tractor_w_loader.urdf.xacro-->
+	<param name="robot_description" command="$(find xacro)/xacro.py $(arg model) " />
+	<!-- take care of robot state publisher here -->
+	<!-- Note: This takes the pace of calling airplane_loader_tf.launch -->
+  <node pkg="robot_state_publisher" type="robot_state_publisher"  name="robot_state_publisher">
+    <param name="publish_frequency" type="double" value="30.0" />
+  </node>
+  <node pkg="joint_state_publisher" type="joint_state_publisher"  name="joint_state_publisher">
+  </node>
+
+</launch>
+
