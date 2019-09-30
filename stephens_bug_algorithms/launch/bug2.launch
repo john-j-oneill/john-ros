@@ -1,0 +1,14 @@
+<launch>
+
+  	<node name ="stage_mover" pkg="stephens_bug_algorithms"  type="stage_mover" args = "bug2" output="screen" >
+              <remap from="/target_pose_ground_truth" to="/robot_1/base_pose_ground_truth" />
+              <remap from="/base_pose_ground_truth" to="/robot_0/base_pose_ground_truth" />
+              <remap from="/base_scan" to="/robot_0/base_scan" />
+              <remap from="/cmd_vel" to="/robot_0/cmd_vel" />
+	</node>
+
+	<node name ="stageros" pkg="stage_ros" type="stageros" args = "$(find stephens_bug_algorithms)/willow-erratic.world" > 
+	</node>
+
+
+</launch>
