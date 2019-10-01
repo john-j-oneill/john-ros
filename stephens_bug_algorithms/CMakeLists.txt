@@ -45,3 +45,13 @@ add_executable(stage_mover src/stage_mover.cpp)
  target_link_libraries(stage_mover
    ${catkin_LIBRARIES}
  )
+
+
+## Declare a cpp executable
+add_executable(bug_nav src/bug_nav.cpp)
+
+## Specify libraries to link a library or executable target against
+ target_link_libraries(bug_nav
+   ${catkin_LIBRARIES}
+ )
+
