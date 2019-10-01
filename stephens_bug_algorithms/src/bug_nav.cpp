@@ -22,7 +22,7 @@ ros::Publisher pub_cmd_vel;
 #define RAD2DEG (180/M_PI)
 #define MAX_LIN_VEL 1.5
 #define MAX_ANG_VEL 0.675
-#define SAFE_WALL_DISTANCE 0.5
+#define SAFE_WALL_DISTANCE 1.0
 #define WALL_ANG_TO_RIGHT (-M_PI/2)
 #define MIN_LIN_VEL 0.25
 #define SAFE_WALL_APPROACH_DISTANCE (1.25*SAFE_WALL_DISTANCE)
@@ -110,37 +110,140 @@ void initializeBools(){
     robot_state = FINDING_SLINE;
 }
 
+struct point{
+    float x;
+    float y;
+};
+
+struct line{
+    point start;
+    point end;
+};
+
+line path;
+
+struct pose{
+    point pos;
+    float yaw;
+};
+pose robot_pose;
+bool got_robot_pose;
+
+struct tracking{
+    float tracking_error;
+    float angle_error;
+    float distance;
+    float corrective_radius;
+};
+
+float distance_to_pt(point p1, point p2)
+{
+    return std::sqrt((p1.x-p2.x)*(p1.x-p2.x)+
+                     (p1.y-p2.y)*(p1.y-p2.y));
+}
+
+float distance_to_line(line l, point p)
+{
+
+    /* https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points */
+    /* Note that this distance is signed, which tells us which side of the line we are on */
+    /* This is our tracking error. */
+    float distance =( ((l.end.y-l.start.y)*p.x)
+                     -((l.end.x-l.start.x)*p.y))
+                     +((l.end.x*l.start.y) - (l.end.y*l.start.x));
+    return distance;
+}
+
+/*!
+ * \brief wrap angle to unit circle
+ * \param angle in radians, any range
+ * \return angle in radians, -pi to +pi
+ */
+float wrap_angle(float angle)
+{
+    angle+= M_PI;
+    angle = ( angle - ( (2*M_PI) * ((float) std::floor( angle / (2*M_PI) ) ) ) ) - M_PI;
+    return angle;
+}
+
+float nearest_angle_diff(float to,float from)
+{
+    /// Get angles to same range
+    to = wrap_angle(to);
+    from = wrap_angle(from);
+    float angle = to - from;
+    /// Account for shorter angle during wraparound
+    if      (angle >   M_PI) { angle -= 2 * M_PI; }
+    else if (angle <= -M_PI) { angle += 2 * M_PI; }
+    return angle;
+}
+
+float bearing_error_to_line(line l, float yaw)
+{
+    float line_bearing = std::atan2(l.end.y-l.start.y,l.end.x-l.start.x);
+    float angle = nearest_angle_diff(line_bearing,yaw);
+    return angle;
+}
+
+
+/*!
+ * \brief get yawrate for twist message
+ * \param radius radius of curvature to follow
+ * \param propel forward velocity
+ * \return yawrate in radians per second
+ */
+float radius_to_yawrate(float radius,float propel)
+{
+    /// Avoid dividing by zero
+    if(std::fabs(radius)<1e-6f){return 0.f;}
+    return (propel/radius);
+}
+
+/*!
+ * \brief corrective_radius
+ * \param tracking_error        Normal distance to the path
+ * \param angle_error           Difference between bearing of robot and bearing of path (-pi to +pi)
+ * \param lookahead_distance    Point to target on the path ahead of the current position
+ * \param min_turn_radius       Could be constraint of ackermann vehicle
+ * \param max_angle_error       Any error beyond this means turn as sharp as possible to get facing the right way
+ * \return radius               Radius of curvature to hit path exactly lookahead distance ahead
+ */
+float corrective_radius(float tracking_error, float angle_error, float lookahead_distance, float min_turn_radius = FLT_MIN, float max_angle_error = M_PI_2)
+{
+    float radius = (tracking_error*tracking_error + lookahead_distance*lookahead_distance) / (tracking_error*std::cos(angle_error) + lookahead_distance*std::sin(angle_error));
+    if((radius < min_turn_radius && radius >=0.0) || angle_error > max_angle_error)
+    {
+        ///
+        return  min_turn_radius;
+    }
+    if((radius >-min_turn_radius && radius < 0.0) || angle_error <-max_angle_error)
+    {
+        return -min_turn_radius;
+    }
+}
+
+tracking follow_line(line l, point robot_pos, float robot_yaw, float lookahead_distance, float min_turn_radius = FLT_MIN, float max_angle_error = M_PI_2)
+{
+    tracking t;
+    t.tracking_error = distance_to_line(l,robot_pos);
+    t.angle_error = bearing_error_to_line(l,robot_yaw);
+    t.corrective_radius = corrective_radius(tracking_error,angle_error,lookahead_distance,min_turn_radius,max_angle_error);
+    t.distance = distance_to_pt(l.end,robot_pos);
+    return t;
+}
 
 /// Callback function for target
 void targetScanCallback(const nav_msgs::Odometry::ConstPtr& targetScan){
 
+    float eps=0.001;/// 1mm
 
-    if(justSelectedTarget){
-        x_target = targetScan->pose.pose.position.x;
-        y_target = targetScan->pose.pose.position.y;
-        x_target_prev = x_target;
-        y_target_prev = y_target;
-        justSelectedTarget = false;
-    }
-    else{
-        x_target = targetScan->pose.pose.position.x;
-        y_target = targetScan->pose.pose.position.y;
-    }
-    do_i_know_target = true;
-
-    if (fabs(x_target_prev-x_target) > 0.01 || fabs(y_target_prev-y_target) > 0.01 || !targetSelected){
-        /// Stop the robot because we are setting a target
-        cmd_vel.linear.x = 0.0;
-        cmd_vel.angular.z = 0.0;
-        pub_cmd_vel.publish(cmd_vel);
-        do_i_know_target = false;
-        /// Reset the target waiting for user confirmation
-        resetTarget();
-        /// Reset all the bools once the target has been set
-        initializeBools();
-        x_target_prev = x_target;
-        y_target_prev = y_target;
-
+    if(got_robot_pose && (std::fabs(path.end.x - float(targetScan->pose.pose.position.x))>eps ||
+                          std::fabs(path.end.x - float(targetScan->pose.pose.position.x))>eps))
+    {
+        path.end.x = targetScan->pose.pose.position.x;
+        path.end.y = targetScan->pose.pose.position.y;
+        path.start = robot_pose.pos;
+        do_i_know_target = true;
     }
 }
 
@@ -311,8 +414,8 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
 
 
     /// Calculate the difference between current x and y and target x and y
-    float deltaX = currentGPSx - x_target;
-    float deltaY = currentGPSy - y_target;
+    float deltaX = x_target - currentGPSx;
+    float deltaY = y_target - currentGPSy;
 
     /// Calculate distance and bearing to target
     distToTarget = sqrt(deltaX*deltaX + deltaY*deltaY);

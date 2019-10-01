@@ -296,7 +296,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     float currentGPStheta;
     float angleKp = 0.675;
     float angleError;
-    float sLineThreshold = 0.01; /// This is the threshold to determine if you are close enough to the S-Line yet
+    float sLineThreshold = 0.05; /// This is the threshold to determine if you are close enough to the S-Line yet
     float startingSquareThresh = 0.3; /// This is to tell if you have circumnavigated (re-entered the starting box)
     float shortestSquareThresh = 0.1; /// This is to tell if you have made it back to the shortest point (after circumnavigating)
     float diffBearingRobotToTarget;
@@ -331,6 +331,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     else{
         angleError = fabs(bearToTarget - currentGPStheta + M_PI);
     }
+    ROS_INFO("angleError=%f",angleError);
     if (robot_state != WALL_FOLLOWING){
         if (angleError > sLineThreshold){
             robot_state = FINDING_SLINE;
