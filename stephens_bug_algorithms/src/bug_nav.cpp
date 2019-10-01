@@ -227,7 +227,7 @@ tracking follow_line(line l, point robot_pos, float robot_yaw, float lookahead_d
     tracking t;
     t.tracking_error = distance_to_line(l,robot_pos);
     t.angle_error = bearing_error_to_line(l,robot_yaw);
-    t.corrective_radius = corrective_radius(tracking_error,angle_error,lookahead_distance,min_turn_radius,max_angle_error);
+    t.corrective_radius = corrective_radius(t.tracking_error,t.angle_error,lookahead_distance,min_turn_radius,max_angle_error);
     t.distance = distance_to_pt(l.end,robot_pos);
     return t;
 }
@@ -382,6 +382,13 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
 
 /// Callback function for base scan
 void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
+    robot_pose.pos.x = gpsScan->pose.pose.position.x;
+    robot_pose.pos.y = gpsScan->pose.pose.position.y;
+    tf::Pose currentRobotPoseTF;
+    tf::poseMsgToTF(gpsScan->pose.pose,currentRobotPoseTF);
+    robot_pose.yaw = tf::getYaw(currentRobotPoseTF.getRotation());
+    got_robot_pose = true;
+
     if(!do_i_know_target){
         return;
     }
@@ -396,7 +403,6 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     /// Define some local variables
     float currentGPSx;
     float currentGPSy;
-    tf::Pose currentRobotPoseTF;
     float currentGPStheta;
     float angleKp = -0.675;
     float angleError,absAngleError;
@@ -409,7 +415,6 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     /// Populate the x,y, and theta variables of the robot
     currentGPSx = gpsScan->pose.pose.position.x;
     currentGPSy = gpsScan->pose.pose.position.y;
-    tf::poseMsgToTF(gpsScan->pose.pose,currentRobotPoseTF);
     currentGPStheta = tf::getYaw(currentRobotPoseTF.getRotation());
 
 
