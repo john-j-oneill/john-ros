@@ -66,38 +66,13 @@ bool bearingSwitched;
 bool negativeBearing;
 bool safeToSwitchFromWall = true;
 float rotated_min_theta;
-bool targetSelected = false;
+bool targetSelected = true;
 bool justSelectedTarget = false;
 bool wallInFront = false;
 
 /// Set up an enum for robot states
 enum robot_states_t {FINDING_SLINE, MOVING_ON_SLINE, WALL_FOLLOWING, REACHED_GOAL};
 robot_states_t robot_state = FINDING_SLINE;
-
-void resetTarget(){
-    /// User input
-    char cmd[50];
-    /// Set goal position
-    if(!targetSelected){
-        std::cout << "Please grab the target (red block) and/or robot (blue block) with the mouse and place them where you would like. When you are finished selecting the locations please start the algorithm by pressing 'y': " ;
-    }
-    while(!targetSelected){
-        /// Get the user input
-        std::cin.getline(cmd, 50);
-        if(cmd[0]!='Y' && cmd[0]!='y')
-        {
-            std::cout << "\nUnknown command " << cmd << std::endl << "Please press 'y' when you are finished moving the blocks to start the algorithm:";
-            continue;
-        }
-        else if(cmd[0] == 'y' || cmd[0] == 'Y'){
-            std::cout << "\nYou have selected a goal of (" << x_target << "," << y_target << ")" << std::endl;
-            std::cout << "STARTING ALGORITHM" << std::endl;
-            targetSelected = true;
-            justSelectedTarget = true;
-        }
-    }
-
-}
 
 void initializeBools(){
     targetSelected = true;
@@ -118,6 +93,7 @@ struct point{
 struct line{
     point start;
     point end;
+    float length;
 };
 
 line path;
@@ -148,9 +124,9 @@ float distance_to_line(line l, point p)
     /* https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points */
     /* Note that this distance is signed, which tells us which side of the line we are on */
     /* This is our tracking error. */
-    float distance =( ((l.end.y-l.start.y)*p.x)
+    float distance =((((l.end.y-l.start.y)*p.x)
                      -((l.end.x-l.start.x)*p.y))
-                     +((l.end.x*l.start.y) - (l.end.y*l.start.x));
+                     +((l.end.x*l.start.y) - (l.end.y*l.start.x)))/l.length;
     return distance;
 }
 
@@ -211,24 +187,24 @@ float radius_to_yawrate(float radius,float propel)
 float corrective_radius(float tracking_error, float angle_error, float lookahead_distance, float min_turn_radius = FLT_MIN, float max_angle_error = M_PI_2)
 {
     float radius = (tracking_error*tracking_error + lookahead_distance*lookahead_distance) / (tracking_error*std::cos(angle_error) + lookahead_distance*std::sin(angle_error));
-    if((radius < min_turn_radius && radius >=0.0) || angle_error > max_angle_error)
-    {
-        ///
-        return  min_turn_radius;
-    }
-    if((radius >-min_turn_radius && radius < 0.0) || angle_error <-max_angle_error)
-    {
-        return -min_turn_radius;
-    }
+//    if((radius < min_turn_radius && radius >=0.0) || angle_error > max_angle_error)
+//    {
+//        ///
+//        return  min_turn_radius;
+//    }
+//    if((radius >-min_turn_radius && radius < 0.0) || angle_error <-max_angle_error)
+//    {
+//        return -min_turn_radius;
+//    }
 }
 
-tracking follow_line(line l, point robot_pos, float robot_yaw, float lookahead_distance, float min_turn_radius = FLT_MIN, float max_angle_error = M_PI_2)
+tracking follow_line(line l, pose robot_pose, float lookahead_distance, float min_turn_radius = FLT_MIN, float max_angle_error = M_PI_2)
 {
     tracking t;
-    t.tracking_error = distance_to_line(l,robot_pos);
-    t.angle_error = bearing_error_to_line(l,robot_yaw);
+    t.tracking_error = distance_to_line(l,robot_pose.pos);
+    t.angle_error = bearing_error_to_line(l,robot_pose.yaw);
     t.corrective_radius = corrective_radius(t.tracking_error,t.angle_error,lookahead_distance,min_turn_radius,max_angle_error);
-    t.distance = distance_to_pt(l.end,robot_pos);
+    t.distance = distance_to_pt(l.end,robot_pose.pos);
     return t;
 }
 
@@ -243,6 +219,7 @@ void targetScanCallback(const nav_msgs::Odometry::ConstPtr& targetScan){
         path.end.x = targetScan->pose.pose.position.x;
         path.end.y = targetScan->pose.pose.position.y;
         path.start = robot_pose.pos;
+        path.length = distance_to_pt(path.start,path.end);
         do_i_know_target = true;
     }
 }
@@ -282,7 +259,7 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
             min_theta = theta;
         }
     }
-    ROS_INFO("min_theta=%f,min_dist=%f",min_theta,min_dist);
+    //ROS_INFO("min_theta=%f,min_dist=%f",min_theta,min_dist);
 
     /// Check to see if a wall is in front (Scan only thetas from -M_PI/4 to M_PI/4)
     for(int ii = floor((-M_PI/4.0-baseScan->angle_min)/baseScan->angle_increment); ii < floor((M_PI/4.0-baseScan->angle_min)/baseScan->angle_increment); ii++){
@@ -392,6 +369,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     if(!do_i_know_target){
         return;
     }
+    tracking t = follow_line(path,robot_pose,2.0);
 
     if(robot_state == REACHED_GOAL){
         cmd_vel.linear.x = 0.0;
@@ -434,14 +412,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
 
 
     /// Calculate which direction the robot needs to rotate to get to the S-Line (Dependent on being above or below the target)
-    angleError = (bearToTarget - currentGPStheta);
-
-    if(angleError>M_PI){
-        angleError = 2*M_PI - angleError;
-    }
-    if(angleError<-M_PI){
-        angleError = 2*M_PI + angleError;
-    }
+    angleError = t.angle_error;
     absAngleError=std::fabs(angleError);
     if (robot_state != WALL_FOLLOWING){
         if (absAngleError > sLineThreshold){
@@ -476,7 +447,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     /// Move along the S-Line
     else if (robot_state == MOVING_ON_SLINE){
 
-        std::cout << "ON THE S-LINE!! " << std::endl;
+        ROS_INFO("ON THE S-LINE. Angle error = %6.3frad, Tracking error = %6.3fm, Radius = %6.3fm",t.angle_error,t.tracking_error,t.corrective_radius);
         if(wallInFront){
 	    cmd_vel.linear.x = MIN_LIN_VEL;
         }else{
