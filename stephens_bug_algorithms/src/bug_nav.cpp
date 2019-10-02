@@ -71,7 +71,7 @@ bool justSelectedTarget = false;
 bool wallInFront = false;
 
 /// Set up an enum for robot states
-enum robot_states_t {FINDING_SLINE, MOVING_ON_SLINE, WALL_FOLLOWING, REACHED_GOAL};
+enum robot_states_t {FINDING_SLINE, MOVING_ON_SLINE, WALL_FOLLOWING, REACHED_GOAL, ERROR_STATE};
 robot_states_t robot_state = FINDING_SLINE;
 
 void initializeBools(){
@@ -103,7 +103,10 @@ struct pose{
     float yaw;
 };
 pose robot_pose;
+point wall_follow_start;
+float max_distance_from_wall_follow_start;
 bool got_robot_pose;
+bool last_tracking_error_sign;
 
 struct tracking{
     float tracking_error;
@@ -186,16 +189,18 @@ float radius_to_yawrate(float radius,float propel)
  */
 float corrective_radius(float tracking_error, float angle_error, float lookahead_distance, float min_turn_radius = FLT_MIN, float max_angle_error = M_PI_2)
 {
-    float radius = (tracking_error*tracking_error + lookahead_distance*lookahead_distance) / (tracking_error*std::cos(angle_error) + lookahead_distance*std::sin(angle_error));
-//    if((radius < min_turn_radius && radius >=0.0) || angle_error > max_angle_error)
-//    {
-//        ///
-//        return  min_turn_radius;
-//    }
-//    if((radius >-min_turn_radius && radius < 0.0) || angle_error <-max_angle_error)
-//    {
-//        return -min_turn_radius;
-//    }
+    float radius = (tracking_error*tracking_error + lookahead_distance*lookahead_distance) / (2.f*(tracking_error*std::cos(angle_error) + lookahead_distance*std::sin(angle_error)));
+    if((radius < min_turn_radius && radius >=0.f) || angle_error > max_angle_error)
+    {
+        //std::cout << "Capping radius to " << min_turn_radius << " because radius of " << radius << " too small or angle of " << angle_error << " too big" << std::endl;
+        return  min_turn_radius;
+    }
+    if((radius >-min_turn_radius && radius < 0.f) || angle_error <-max_angle_error)
+    {
+        //std::cout << "Capping radius to " << -min_turn_radius << " because radius of " << radius << " too small or angle of " << angle_error << " too big" << std::endl;
+        return -min_turn_radius;
+    }
+    return radius;
 }
 
 tracking follow_line(line l, pose robot_pose, float lookahead_distance, float min_turn_radius = FLT_MIN, float max_angle_error = M_PI_2)
@@ -231,7 +236,7 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
         return;
     }
 
-    if(robot_state == REACHED_GOAL){
+    if(robot_state == REACHED_GOAL || robot_state == ERROR_STATE){
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = 0.0;
         pub_cmd_vel.publish(cmd_vel);
@@ -278,6 +283,8 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
             distance_SLine = distToTarget;
         }
         robot_state = WALL_FOLLOWING;
+        wall_follow_start = robot_pose.pos;
+        max_distance_from_wall_follow_start = 0.f;
     }
 
     /// ==== Wall Following State ====
@@ -401,7 +408,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     float deltaY = y_target - currentGPSy;
 
     /// Calculate distance and bearing to target
-    distToTarget = sqrt(deltaX*deltaX + deltaY*deltaY);
+    distToTarget = t.distance;
     bearToTarget = atan2(deltaY,deltaX);
 
     if (!bugAlgorithm1 && startingAlgorithm){
@@ -412,9 +419,8 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
 
 
     /// Calculate which direction the robot needs to rotate to get to the S-Line (Dependent on being above or below the target)
-    angleError = t.angle_error;
-    absAngleError=std::fabs(angleError);
-    if (robot_state != WALL_FOLLOWING){
+    absAngleError=std::fabs(t.angle_error);
+    if (robot_state != WALL_FOLLOWING && robot_state != MOVING_ON_SLINE){
         if (absAngleError > sLineThreshold){
             robot_state = FINDING_SLINE;
         }
@@ -422,26 +428,26 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
             robot_state = MOVING_ON_SLINE;
         }
     }
+    if(t.distance < TARGET_SQUARE_THRESH){
+        /// WE MADE IT TO THE GOAL!
+        robot_state = REACHED_GOAL;
+        cmd_vel.linear.x = 0.0;
+        cmd_vel.angular.z = 0.0;
+        pub_cmd_vel.publish(cmd_vel);
+        std::cout << "MADE IT TO THE GOAL!!" << std::endl;
+        return;
+    }
 
     /// Find the S-Line by rotating in place
     if (robot_state == FINDING_SLINE){
         std::cout << "FINDING S-LINE!! " << std::endl;
         cmd_vel.linear.x = 0.0;
-        cmd_vel.angular.z = angleError*angleKp;
-        if(angleError*angleKp > MAX_ANG_VEL){
+        cmd_vel.angular.z = t.angle_error*angleKp;
+        if( cmd_vel.angular.z > MAX_ANG_VEL){
             cmd_vel.angular.z = MAX_ANG_VEL;
         }
-        if(angleError*angleKp < -MAX_ANG_VEL){
-            cmd_vel.angular.z = -MAX_ANG_VEL;
-        }
-        if(fabs(deltaX) < TARGET_SQUARE_THRESH && fabs(deltaY) < TARGET_SQUARE_THRESH){
-            /// WE MADE IT TO THE GOAL!
-            robot_state = REACHED_GOAL;
-            cmd_vel.linear.x = 0.0;
-            cmd_vel.angular.z = 0.0;
-            pub_cmd_vel.publish(cmd_vel);
-            std::cout << "MADE IT TO THE GOAL!!" << std::endl;
-            return;
+        if( cmd_vel.angular.z <-MAX_ANG_VEL){
+            cmd_vel.angular.z =-MAX_ANG_VEL;
         }
     }
     /// Move along the S-Line
@@ -453,160 +459,42 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
         }else{
             cmd_vel.linear.x = 0.5*MAX_LIN_VEL;
         }
-        cmd_vel.angular.z = 0.0;
-        if(fabs(deltaX) < TARGET_SQUARE_THRESH && fabs(deltaY) < TARGET_SQUARE_THRESH){
-            /// WE MADE IT TO THE GOAL!
-            robot_state = REACHED_GOAL;
-            cmd_vel.linear.x = 0.0;
-            cmd_vel.angular.z = 0.0;
-            pub_cmd_vel.publish(cmd_vel);
-            std::cout << "MADE IT TO THE GOAL!!" << std::endl;
-            return;
-        }
+        cmd_vel.angular.z = -radius_to_yawrate(t.corrective_radius,cmd_vel.linear.x);
     }
     /// Follow a wall state
     else if (robot_state == WALL_FOLLOWING){
-        std::cout << "WALL FOLLOWING!!! " << std::endl;
+        bool tracking_error_sign = t.tracking_error>0.f;
+        ROS_INFO("WALL FOLLOWING tracking=%6.3f, sign=%d, last=%d",t.tracking_error,(int)tracking_error_sign,(int)last_tracking_error_sign);
 
-        /// This is for bug algorithm 1 -- The difference is to circumnavigate then leave the wall
-        if(bugAlgorithm1){
-            if (firstTimeWallFollowing){
-                minDistWallFollowing = std::numeric_limits<float>::max();
-                x_circumnavigation = currentGPSx;
-                y_circumnavigation = currentGPSy;
-                y_minDistWallFollowing = std::numeric_limits<float>::max();
-                x_minDistWallFollowing = std::numeric_limits<float>::max();
-                outOfStartingSquare = false;
-                circumnavigated = false;
-                firstTimeWallFollowing = false;
-            }
+        float distance_from_wall_follow_start = distance_to_pt(robot_pose.pos,wall_follow_start);
+        if(distance_from_wall_follow_start>max_distance_from_wall_follow_start){
+            max_distance_from_wall_follow_start = distance_from_wall_follow_start;
+        }
 
-            /// Find the minimum distance to the wall and store the x and y coordinates at this point
-            if(distToTarget < minDistWallFollowing && !circumnavigated){
-                minDistWallFollowing = distToTarget;
-                x_minDistWallFollowing = currentGPSx;
-                y_minDistWallFollowing = currentGPSy;
-            }
+        /// Calculate the difference between bearing to target and bearing to sLine
+        diffBearingTargetToRobot = std::fmod((bearToTarget - bearing_SLine+10*M_PI),2*M_PI);
+        diffBearingRobotToTarget = std::fmod((bearing_SLine - bearToTarget+10*M_PI),2*M_PI);
 
-            /// Calculate difference between current x and y and the circumnavigated x and y at start point of wall
+        /// Check if you are in the start point square
+        if(distance_from_wall_follow_start < startingSquareThresh){
+            if(max_distance_from_wall_follow_start > 2.f*startingSquareThresh){
+                ROS_ERROR("Circumnavigated entire obstacle. WTF, mate?");
+                robot_state=ERROR_STATE;
+                cmd_vel.linear.x = 0.0;
+                cmd_vel.angular.z = 0.0;
+                pub_cmd_vel.publish(cmd_vel);
 
-            if(!circumnavigated)
-            {
-                xDeltaToStart = currentGPSx - x_circumnavigation;
-                yDeltaToStart = currentGPSy - y_circumnavigation;
-
-                /// Check if you are in the start point square
-                if(fabs(xDeltaToStart) < startingSquareThresh && fabs(yDeltaToStart) < startingSquareThresh){
-                    if(outOfStartingSquare){
-                        circumnavigated = true;
-                        std::cout << "I CIRCUMNAVIGATED!!!!!!" << std::endl;
-                    }
-                    else{
-                        std::cout << "I'M STILL IN THE STARTING SQUARE" << std::endl;
-                    }
-                }
-                else{
-                    outOfStartingSquare = true;
-                }
-            }
-
-            if(circumnavigated)
-            {
-                xDeltaToTarget = currentGPSx - x_minDistWallFollowing;
-                yDeltaToTarget = currentGPSy - y_minDistWallFollowing;
-
-                /// Check if you are in the shortest point from feature square
-                if(fabs(xDeltaToTarget) < shortestSquareThresh && fabs(yDeltaToTarget) < shortestSquareThresh){
-                    std::cout << "FOUND THE SHORTEST DISTANCE" << std::endl;
-                    robot_state = FINDING_SLINE;
-                    firstTimeWallFollowing = true;
-                    /// FOUND IT SO STOP
-                    cmd_vel.linear.x = 0.0;
-                    cmd_vel.angular.z = 0.0;
-                }
+            }else{
+                ROS_INFO("I'M STILL IN THE STARTING SQUARE! dist=%6.3fm",distance_from_wall_follow_start);
+                /// DO NOTHING
             }
         }
-        /// This is for bug algorithm 2 -- The difference is to leave the wall after reaching the S line again
-        else if (!bugAlgorithm1){
-
-
-
-            /// Determine if this is the first time on the obstacle's wall
-            if (firstTimeWallFollowing){
-                x_circumnavigation = currentGPSx;
-                y_circumnavigation = currentGPSy;
-                outOfStartingSquare = false;
-                firstTimeWallFollowing = false;
-                bearingSwitched = false;
-
-            }
-
-            /// Calculate difference between current x and y and the circumnavigated x and y at start point of wall
-
-            xDeltaToStart = currentGPSx - x_circumnavigation;
-            yDeltaToStart = currentGPSy - y_circumnavigation;
-
-            /// Calculate the difference between bearing to target and bearing to sLine
-            diffBearingTargetToRobot = std::fmod((bearToTarget - bearing_SLine+10*M_PI),2*M_PI);
-            diffBearingRobotToTarget = std::fmod((bearing_SLine - bearToTarget+10*M_PI),2*M_PI);
-
-            /// Check if you are in the start point square
-            if(fabs(xDeltaToStart) < startingSquareThresh && fabs(yDeltaToStart) < startingSquareThresh){
-                if(!outOfStartingSquare){
-                    std::cout << "I'M STILL IN THE STARTING SQUARE!" << std::endl;
-                    /// DO NOTHING
-                }
-            }
-            else{
-                if (!outOfStartingSquare){
-                    if(diffBearingTargetToRobot < diffBearingRobotToTarget){
-                        negativeBearing = true;
-                    }
-                    else{
-                        negativeBearing = false;
-                    }
-                    outOfStartingSquare = true;
-                }
-            }
-
-            /// Check to see if the bearing sign has switched
-            ///
-            ///
-            if(outOfStartingSquare){
-                if(negativeBearing && (diffBearingTargetToRobot > diffBearingRobotToTarget)){
-                    if((distToTarget < distance_SLine) && safeToSwitchFromWall){
-                        bearingSwitched = true;
-                    }
-                    else{
-                        negativeBearing = !negativeBearing;
-                    }
-                }
-                else if(!negativeBearing && (diffBearingTargetToRobot < diffBearingRobotToTarget)){
-                    if((distToTarget < distance_SLine) && safeToSwitchFromWall){
-                        bearingSwitched = true;
-                    }
-                    else{
-                        negativeBearing = !negativeBearing;
-                    }
-                }
-            }
-
-            if(bearingSwitched && outOfStartingSquare && distToTarget < distance_SLine){
-                distance_SLine = distToTarget;
+        else{
+            if(tracking_error_sign!=last_tracking_error_sign){
                 robot_state = FINDING_SLINE;
-                firstTimeWallFollowing = true;
             }
-
         }
-        if(fabs(deltaX) < TARGET_SQUARE_THRESH && fabs(deltaY) < TARGET_SQUARE_THRESH){
-            /// WE MADE IT TO THE GOAL!
-            robot_state = REACHED_GOAL;
-            cmd_vel.linear.x = 0.0;
-            cmd_vel.angular.z = 0.0;
-            pub_cmd_vel.publish(cmd_vel);
-            std::cout << "MADE IT TO THE GOAL!!" << std::endl;
-            return;
-        }
+        last_tracking_error_sign = tracking_error_sign;
     }
 
     /// I am not in a valid state so STOP!
