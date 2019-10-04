@@ -32,6 +32,14 @@ ros::Publisher pub_cmd_vel;
 #define WALL_DIST_ERROR_THRESHOLD 0.001
 #define TARGET_SQUARE_THRESH 0.5
 
+
+/// Params
+bool  verbose = false;
+float angleKp = -0.675;
+float sLineThreshold = 0.1; /// This is the threshold to determine if you are close enough to the S-Line yet
+float startingSquareThresh = 0.3; /// This is to tell if you have circumnavigated (re-entered the starting box)
+float lookaheadDistance = 2.0; /// How far ahead to steer towards
+
 /// Define global variables
 float min_theta = 0.0;
 float min_dist = 0.0;
@@ -225,6 +233,7 @@ void targetScanCallback(const nav_msgs::Odometry::ConstPtr& targetScan){
         path.end.y = targetScan->pose.pose.position.y;
         path.start = robot_pose.pos;
         path.length = distance_to_pt(path.start,path.end);
+        ROS_INFO("Got new target of x=%6.3f,y=%6.3f",path.end.x,path.end.y);
         do_i_know_target = true;
     }
 }
@@ -366,6 +375,8 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
 
 /// Callback function for base scan
 void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
+
+    /// Copy robot pose into global so scan callback can use it
     robot_pose.pos.x = gpsScan->pose.pose.position.x;
     robot_pose.pos.y = gpsScan->pose.pose.position.y;
     tf::Pose currentRobotPoseTF;
@@ -373,74 +384,38 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     robot_pose.yaw = tf::getYaw(currentRobotPoseTF.getRotation());
     got_robot_pose = true;
 
-    if(!do_i_know_target){
-        return;
-    }
-    tracking t = follow_line(path,robot_pose,2.0);
-
-    if(robot_state == REACHED_GOAL){
+    /// If we don't have a target, or are at target, just stop
+    if(!do_i_know_target || robot_state == REACHED_GOAL){
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = 0.0;
         pub_cmd_vel.publish(cmd_vel);
         return;
     }
 
-    /// Define some local variables
-    float currentGPSx;
-    float currentGPSy;
-    float currentGPStheta;
-    float angleKp = -0.675;
-    float angleError,absAngleError;
-    float sLineThreshold = 0.1; /// This is the threshold to determine if you are close enough to the S-Line yet
-    float startingSquareThresh = 0.3; /// This is to tell if you have circumnavigated (re-entered the starting box)
-    float shortestSquareThresh = 0.1; /// This is to tell if you have made it back to the shortest point (after circumnavigating)
-    float diffBearingRobotToTarget;
-    float diffBearingTargetToRobot;
-
-    /// Populate the x,y, and theta variables of the robot
-    currentGPSx = gpsScan->pose.pose.position.x;
-    currentGPSy = gpsScan->pose.pose.position.y;
-    currentGPStheta = tf::getYaw(currentRobotPoseTF.getRotation());
-
-
-    /// Calculate the difference between current x and y and target x and y
-    float deltaX = x_target - currentGPSx;
-    float deltaY = y_target - currentGPSy;
-
-    /// Calculate distance and bearing to target
-    distToTarget = t.distance;
-    bearToTarget = atan2(deltaY,deltaX);
-
-    if (!bugAlgorithm1 && startingAlgorithm){
-        bearing_SLine = bearToTarget;
-        distance_SLine = distToTarget;
-        startingAlgorithm = false;
-    }
-
+    tracking t = follow_line(path,robot_pose,lookaheadDistance);
 
     /// Calculate which direction the robot needs to rotate to get to the S-Line (Dependent on being above or below the target)
-    absAngleError=std::fabs(t.angle_error);
     if (robot_state != WALL_FOLLOWING && robot_state != MOVING_ON_SLINE){
-        if (absAngleError > sLineThreshold){
+        if (std::fabs(t.angle_error) > sLineThreshold){
             robot_state = FINDING_SLINE;
         }
-        else if(absAngleError <= sLineThreshold){
+        else{
             robot_state = MOVING_ON_SLINE;
         }
     }
     if(t.distance < TARGET_SQUARE_THRESH){
         /// WE MADE IT TO THE GOAL!
+        ROS_INFO_COND(robot_state != REACHED_GOAL,"MADE IT TO THE GOAL!!");
         robot_state = REACHED_GOAL;
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = 0.0;
         pub_cmd_vel.publish(cmd_vel);
-        std::cout << "MADE IT TO THE GOAL!!" << std::endl;
         return;
     }
 
     /// Find the S-Line by rotating in place
     if (robot_state == FINDING_SLINE){
-        std::cout << "FINDING S-LINE!! " << std::endl;
+        ROS_INFO_COND(verbose,"FINDING S-LINE. Angle error = %6.3frad",t.angle_error);
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = t.angle_error*angleKp;
         if( cmd_vel.angular.z > MAX_ANG_VEL){
@@ -453,7 +428,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     /// Move along the S-Line
     else if (robot_state == MOVING_ON_SLINE){
 
-        ROS_INFO("ON THE S-LINE. Angle error = %6.3frad, Tracking error = %6.3fm, Radius = %6.3fm",t.angle_error,t.tracking_error,t.corrective_radius);
+        ROS_INFO_COND(verbose,"ON THE S-LINE. Angle error = %6.3frad, Tracking error = %6.3fm, Radius = %6.3fm",t.angle_error,t.tracking_error,t.corrective_radius);
         if(wallInFront){
 	    cmd_vel.linear.x = MIN_LIN_VEL;
         }else{
@@ -464,16 +439,12 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     /// Follow a wall state
     else if (robot_state == WALL_FOLLOWING){
         bool tracking_error_sign = t.tracking_error>0.f;
-        ROS_INFO("WALL FOLLOWING tracking=%6.3f, sign=%d, last=%d",t.tracking_error,(int)tracking_error_sign,(int)last_tracking_error_sign);
+        ROS_INFO_COND(verbose,"WALL FOLLOWING tracking=%6.3f, sign=%d, last=%d",t.tracking_error,(int)tracking_error_sign,(int)last_tracking_error_sign);
 
         float distance_from_wall_follow_start = distance_to_pt(robot_pose.pos,wall_follow_start);
         if(distance_from_wall_follow_start>max_distance_from_wall_follow_start){
             max_distance_from_wall_follow_start = distance_from_wall_follow_start;
         }
-
-        /// Calculate the difference between bearing to target and bearing to sLine
-        diffBearingTargetToRobot = std::fmod((bearToTarget - bearing_SLine+10*M_PI),2*M_PI);
-        diffBearingRobotToTarget = std::fmod((bearing_SLine - bearToTarget+10*M_PI),2*M_PI);
 
         /// Check if you are in the start point square
         if(distance_from_wall_follow_start < startingSquareThresh){
@@ -485,7 +456,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
                 pub_cmd_vel.publish(cmd_vel);
 
             }else{
-                ROS_INFO("I'M STILL IN THE STARTING SQUARE! dist=%6.3fm",distance_from_wall_follow_start);
+                ROS_INFO_COND(verbose,"I'M STILL IN THE STARTING SQUARE! dist=%6.3fm",distance_from_wall_follow_start);
                 /// DO NOTHING
             }
         }
@@ -499,7 +470,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
 
     /// I am not in a valid state so STOP!
     else{
-        std::cout << "Something has gone horribly wrong! I am stopping" << std::endl;
+        ROS_WARN("Something has gone horribly wrong! I am stopping");
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = 0.0;
     }
@@ -539,14 +510,6 @@ int main(int argc, char **argv)
     ros::Subscriber sub_gps_target = nh_.subscribe("/target_pose_ground_truth",1,targetScanCallback); /// Subscribe to target pos
     ros::Subscriber sub_base_scan = nh_.subscribe("/base_scan",1,baseScanCallback); /// Subscribes to base scan
     ros::Subscriber sub_gps_pose = nh_.subscribe("/base_pose_ground_truth",1,gpsScanCallback); /// Subscribes to gps of current pos
-
-    if(bugAlgorithm1){
-        std::cout << "STARTING BUG 1 ALGORITHM!" << std::endl;
-    }
-    else if(!bugAlgorithm1){
-        std::cout << "STARTING BUG 2 ALGORTIHM!" << std::endl;
-    }
-
 
     ros::spin();
 
