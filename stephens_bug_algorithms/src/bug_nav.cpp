@@ -5,6 +5,7 @@
 #include <geometry_msgs/Twist.h>
 #include <sstream>
 #include <nav_msgs/Odometry.h>
+#include <std_msgs/Int8.h>
 #include <tf/transform_datatypes.h>
 #include <limits>
 #include <visualization_msgs/Marker.h>
@@ -16,7 +17,7 @@
  */
 
 /// The node is publishing a geometry_msgs/Twist
-ros::Publisher pub_cmd_vel;
+ros::Publisher pub_cmd_vel, pub_state;
 
 /// Define all #defines here!
 #define RAD2DEG (180/M_PI)
@@ -41,57 +42,12 @@ float startingSquareThresh = 0.3; /// This is to tell if you have circumnavigate
 float lookaheadDistance = 2.0; /// How far ahead to steer towards
 
 /// Define global variables
-float min_theta = 0.0;
-float min_dist = 0.0;
-bool firstTimeWallFollowing = true;
-float minDistWallFollowing;
-float x_minDistWallFollowing;
-float y_minDistWallFollowing;
-bool outOfCircle = false;
-double foundShortestDistance;
-float x_circumnavigation;
-float y_circumnavigation;
-bool outOfStartingSquare = false;
-float xDeltaToStart;
-float yDeltaToStart;
-float xDeltaToTarget;
-float yDeltaToTarget;
-bool circumnavigated = false;
-bool bugAlgorithm1 = true;
-bool startingAlgorithm = true;
-float bearing_SLine;
-float distance_SLine;
-float x_target;
-float y_target;
-float x_target_prev = 0.0;
-float y_target_prev = 0.0;
-float distToTarget;
-float bearToTarget;
 geometry_msgs::Twist cmd_vel;
-
-bool do_i_know_target=false;
-bool bearingSwitched;
-bool negativeBearing;
-bool safeToSwitchFromWall = true;
-float rotated_min_theta;
-bool targetSelected = true;
-bool justSelectedTarget = false;
 bool wallInFront = false;
 
 /// Set up an enum for robot states
-enum robot_states_t {FINDING_SLINE, MOVING_ON_SLINE, WALL_FOLLOWING, REACHED_GOAL, ERROR_STATE};
-robot_states_t robot_state = FINDING_SLINE;
-
-void initializeBools(){
-    targetSelected = true;
-    firstTimeWallFollowing = true;
-    outOfCircle = false;
-    startingAlgorithm = true;
-    circumnavigated = false;
-    outOfStartingSquare = false;
-    justSelectedTarget = false;
-    robot_state = FINDING_SLINE;
-}
+enum robot_states_t {FINDING_SLINE, MOVING_ON_SLINE, FINDING_WALL, WALL_FOLLOWING, REACHED_GOAL, ERROR_STATE};
+robot_states_t robot_state = REACHED_GOAL;
 
 struct point{
     float x;
@@ -104,16 +60,18 @@ struct line{
     float length;
 };
 
-line path;
 
 struct pose{
     point pos;
     float yaw;
 };
+
+line path;
 pose robot_pose;
 point wall_follow_start;
 float max_distance_from_wall_follow_start;
 bool got_robot_pose;
+bool do_i_know_target=false;
 bool last_tracking_error_sign;
 
 struct tracking{
@@ -226,6 +184,7 @@ void targetScanCallback(const nav_msgs::Odometry::ConstPtr& targetScan){
 
     float eps=0.001;/// 1mm
 
+    /// Only update if we got a new target
     if(got_robot_pose && (std::fabs(path.end.x - float(targetScan->pose.pose.position.x))>eps ||
                           std::fabs(path.end.x - float(targetScan->pose.pose.position.x))>eps))
     {
@@ -241,10 +200,13 @@ void targetScanCallback(const nav_msgs::Odometry::ConstPtr& targetScan){
 
 /// Callback function for base scan
 void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
-    if(!do_i_know_target || !targetSelected){
+
+    /// Don't bother if we don't know where we are or where we are going
+    if(!do_i_know_target){
         return;
     }
 
+    /// This is redunant, but make sure we stop even if one message drops out. \todo Add timer to avoid needing this.
     if(robot_state == REACHED_GOAL || robot_state == ERROR_STATE){
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = 0.0;
@@ -256,9 +218,10 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
     /// Define some local variables
     float theta;
     float dist;
+    float min_theta = 0.0;
+    float min_dist = 0.0;
     float wallAngleError;
     float wallDistError;
-    float angularSpeed;
 
 
     /// Set min_dist to its max value to initiate it
@@ -288,16 +251,13 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
 
     /// Check to see if the robot is within the wall approach distance to detect the wall
     if (min_dist <= SAFE_WALL_APPROACH_DISTANCE && robot_state != FINDING_SLINE && (min_theta > -(M_PI/2) && min_theta < (M_PI/2)) && wallInFront){
-        if(robot_state == MOVING_ON_SLINE){
-            distance_SLine = distToTarget;
-        }
-        robot_state = WALL_FOLLOWING;
+        robot_state = FINDING_WALL;
         wall_follow_start = robot_pose.pos;
         max_distance_from_wall_follow_start = 0.f;
     }
 
     /// ==== Wall Following State ====
-    if (robot_state == WALL_FOLLOWING){
+    if (robot_state == FINDING_WALL || robot_state == WALL_FOLLOWING){
         /// First thing to do is stop
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = 0.0;
@@ -305,67 +265,32 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
 
         /// Calculate errors for "parallelness" to the wall and distance from wall
         wallAngleError = (min_theta - WALL_ANG_TO_RIGHT);
-        wallDistError = (min_dist - SAFE_WALL_DISTANCE);
+        wallDistError = -(min_dist - SAFE_WALL_DISTANCE);
 
-        /// Calculate the angular velocity based on weighted sum of both criteria (Parallelness and distance from wall)
-        angularSpeed = wallAngleError*ALPHA*KP - wallDistError*(1-ALPHA)*KP;
-        cmd_vel.angular.z = angularSpeed;
-
-        /// Make sure the angular velocity does not exceed the limits
-        if(angularSpeed > MAX_ANG_VEL){
-            cmd_vel.angular.z = MAX_ANG_VEL;
+        if (robot_state == FINDING_WALL && std::fabs(wallAngleError) < sLineThreshold)
+        {
+            robot_state = WALL_FOLLOWING;
         }
-        if(angularSpeed < -MAX_ANG_VEL){
-            cmd_vel.angular.z = -MAX_ANG_VEL;
-        }
+        if (robot_state == FINDING_WALL)
+        {
 
-        /// If the bearing is "far off" and the distance is "far off" then rotate proportional to angle error and move forward SLOWLY
-        if (fabs(wallAngleError) > WALL_ANGLE_ERROR_THRESHOLD && fabs(wallDistError) > WALL_DIST_ERROR_THRESHOLD){
-            if(wallInFront){
-                cmd_vel.linear.x = 0.1*MIN_LIN_VEL;
-            }else{
-                cmd_vel.linear.x = MIN_LIN_VEL;
-            }
-            /// Calculate the angular velocity
-            angularSpeed = angularSpeed = wallAngleError*(ALPHA)*KP;
-            cmd_vel.angular.z = angularSpeed;
-            if(angularSpeed > MAX_ANG_VEL){
+            cmd_vel.linear.x = 0.0;
+            cmd_vel.angular.z = wallAngleError*angleKp;
+            if( cmd_vel.angular.z > MAX_ANG_VEL){
                 cmd_vel.angular.z = MAX_ANG_VEL;
             }
-            if(angularSpeed < -MAX_ANG_VEL){
-                cmd_vel.angular.z = -MAX_ANG_VEL;
+            if( cmd_vel.angular.z <-MAX_ANG_VEL){
+                cmd_vel.angular.z =-MAX_ANG_VEL;
             }
-
-        }
-        /// If the bearing is "far off" but the distance is "close" then only move proportional to angle error
-        else if(fabs(wallAngleError) > WALL_ANGLE_ERROR_THRESHOLD && fabs(wallDistError) <= WALL_DIST_ERROR_THRESHOLD){
-            if(wallInFront){
-                cmd_vel.linear.x = 0.1*MIN_LIN_VEL;
-            }else{
-                cmd_vel.linear.x = MIN_LIN_VEL;
-            }
-        }
-        /// If the bearing is "close" but the distance is "far off" then move slowly right and forward
-        else if(fabs(wallAngleError) <= WALL_ANGLE_ERROR_THRESHOLD && fabs(wallDistError) > WALL_DIST_ERROR_THRESHOLD){
-            if(wallInFront){
-                cmd_vel.linear.x = 0.1*MIN_LIN_VEL;
-            }else{
-                cmd_vel.linear.x = MIN_LIN_VEL;
-            }
-        }
-        /// If the bearing is "close" and the distance is "close" then only move proportional to angle error
-        else if(fabs(wallAngleError) <= WALL_ANGLE_ERROR_THRESHOLD && fabs(wallDistError) <= WALL_DIST_ERROR_THRESHOLD){
+        }else{
+            float radius = corrective_radius(wallDistError,wallAngleError,lookaheadDistance);
+            ROS_INFO_COND(verbose,"Following Wall. Angle error = %6.3frad, Tracking error = %6.3fm, Radius = %6.3fm",wallAngleError,wallDistError,radius);
             if(wallInFront){
                 cmd_vel.linear.x = MIN_LIN_VEL;
             }else{
-                cmd_vel.linear.x = MAX_LIN_VEL;
+                cmd_vel.linear.x = 0.5*MAX_LIN_VEL;
             }
-        }
-        /// Something has gone wrong!
-        else{
-            cmd_vel.linear.x = 0.0;
-            cmd_vel.angular.z = 0.0;
-            std::cout << "SOMETHING HAS GONE TERRIBLY WRONG! I AM STOPPING" << std::endl;
+            cmd_vel.angular.z = -radius_to_yawrate(radius,cmd_vel.linear.x);
         }
         /// Publish the velocity
         pub_cmd_vel.publish(cmd_vel);
@@ -384,8 +309,12 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     robot_pose.yaw = tf::getYaw(currentRobotPoseTF.getRotation());
     got_robot_pose = true;
 
+    std_msgs::Int8 state_msg;
+    state_msg.data = (int8_t) robot_state;
+    pub_state.publish(state_msg);
+
     /// If we don't have a target, or are at target, just stop
-    if(!do_i_know_target || robot_state == REACHED_GOAL){
+    if(!do_i_know_target || robot_state == REACHED_GOAL || robot_state == ERROR_STATE){
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = 0.0;
         pub_cmd_vel.publish(cmd_vel);
@@ -395,7 +324,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     tracking t = follow_line(path,robot_pose,lookaheadDistance);
 
     /// Calculate which direction the robot needs to rotate to get to the S-Line (Dependent on being above or below the target)
-    if (robot_state != WALL_FOLLOWING && robot_state != MOVING_ON_SLINE){
+    if (robot_state != WALL_FOLLOWING && robot_state != FINDING_WALL && robot_state != MOVING_ON_SLINE){
         if (std::fabs(t.angle_error) > sLineThreshold){
             robot_state = FINDING_SLINE;
         }
@@ -430,14 +359,14 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
 
         ROS_INFO_COND(verbose,"ON THE S-LINE. Angle error = %6.3frad, Tracking error = %6.3fm, Radius = %6.3fm",t.angle_error,t.tracking_error,t.corrective_radius);
         if(wallInFront){
-	    cmd_vel.linear.x = MIN_LIN_VEL;
+            cmd_vel.linear.x = MIN_LIN_VEL;
         }else{
             cmd_vel.linear.x = 0.5*MAX_LIN_VEL;
         }
         cmd_vel.angular.z = -radius_to_yawrate(t.corrective_radius,cmd_vel.linear.x);
     }
     /// Follow a wall state
-    else if (robot_state == WALL_FOLLOWING){
+    else if (robot_state == WALL_FOLLOWING || robot_state == FINDING_WALL){
         bool tracking_error_sign = t.tracking_error>0.f;
         ROS_INFO_COND(verbose,"WALL FOLLOWING tracking=%6.3f, sign=%d, last=%d",t.tracking_error,(int)tracking_error_sign,(int)last_tracking_error_sign);
 
@@ -476,7 +405,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
     }
 
     /// Publish a velocity for any robot state EXCEPT state 2 (The LIDAR baseScanCallback handles state 2)
-    if (robot_state != WALL_FOLLOWING){
+    if (robot_state != WALL_FOLLOWING && robot_state != FINDING_WALL){
         pub_cmd_vel.publish(cmd_vel);
     }
 }
@@ -485,26 +414,14 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
 int main(int argc, char **argv)
 {
     /// Name your node
-    ros::init(argc, argv, "stage_mover");
-
-
-    for (int ii = 1; ii < argc; ii++) {
-        if (std::string(argv[ii]) == "bug1") {
-            bugAlgorithm1 = true;
-        }
-        else if(std::string(argv[ii]) == "bug2"){
-            bugAlgorithm1 = false;
-        }
-        else{
-            bugAlgorithm1 = true;
-        }
-    }
+    ros::init(argc, argv, "bug_nav");
 
     /// Setup a ROS node handle (nh_)
     ros::NodeHandle nh_;
 
     /// Publisher object that decides what kind of topic to publish and how fast.
     pub_cmd_vel = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
+    pub_state   = nh_.advertise<std_msgs::Int8>("/bug_state", 1);
 
     /// Setup up the subscribers
     ros::Subscriber sub_gps_target = nh_.subscribe("/target_pose_ground_truth",1,targetScanCallback); /// Subscribe to target pos
