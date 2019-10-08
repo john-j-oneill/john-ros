@@ -14,6 +14,15 @@
 /// Zbar Barcode Library
 #include <zbar.h>
 
+/// Boost time, for tic() toc()
+#include "boost/date_time/posix_time/posix_time.hpp" ///!< include all types plus i/o
+
+/// Silly little timing functions, to get real CPU time, not ROS time
+boost::posix_time::ptime start_tic_toc[10];
+inline void tic(int i=0){start_tic_toc[i]=boost::posix_time::microsec_clock::universal_time();}
+inline double toc(int i=0){return ((double)(boost::posix_time::microsec_clock::universal_time()-start_tic_toc[i]).total_microseconds())/1000000.0;}
+
+
 
 class BarCodeFinder
 {
@@ -41,7 +50,8 @@ public:
     : it_(nh_)
   {
     std::string image_topic = nh_.resolveName("image");
-    sub_ = it_.subscribeCamera(image_topic, 1, &BarCodeFinder::imageCb, this);
+    image_transport::TransportHints hints("compressed");
+    sub_ = it_.subscribeCamera(image_topic, 1, &BarCodeFinder::imageCb, this, hints);
     pub_ = it_.advertise("image_out", 1);
     pub_points_out_ = nh_.advertise<geometry_msgs::PoseArray>("qrcodes", 1);
     pub_trans_out_ = nh_.advertise<geometry_msgs::TransformStamped>("qrcode_trans", 10);
@@ -169,7 +179,7 @@ public:
         image = input_bridge->image;
     }
     catch (cv_bridge::Exception& ex){
-        ROS_ERROR("[cv_barcode_node] Failed to convert image");
+        ROS_ERROR("[cv_barcode_node] Failed to convert image: %s", ex.what());
         return;
     }
 
@@ -189,8 +199,10 @@ public:
     uchar *raw = (uchar *)image_gray.data;
     // wrap image data
     zbar::Image zimage(width, height, "Y800", raw, width * height);
-    // scan the image for barcodes
+    // scan the image for barcodes'
+tic(0);
     int n = scanner_.scan(zimage);
+ROS_INFO("QR conversion took %6.3f seconds",toc(0));
     int symbols = 0;
 
     geometry_msgs::PoseArray pose_msg;

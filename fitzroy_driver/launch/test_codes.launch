@@ -1,0 +1,83 @@
+<launch>
+  <!-- Look for qr codes as landmarks. 
+1280x960:
+0 codes
+[ INFO] [1570501692.846775084]: QR conversion took  0.815 seconds
+[ INFO] [1570501694.289351470]: QR conversion took  0.877 seconds
+[ INFO] [1570501695.685446473]: QR conversion took  0.851 seconds
+[ INFO] [1570501696.980946975]: QR conversion took  0.816 seconds
+[ INFO] [1570501698.277634920]: QR conversion took  0.827 seconds
+[ INFO] [1570501699.537517580]: QR conversion took  0.800 seconds
+[ INFO] [1570501700.788154558]: QR conversion took  0.802 seconds
+[ INFO] [1570501702.041155378]: QR conversion took  0.790 seconds
+1 code
+[ INFO] [1570501703.713796985]: QR conversion took  1.198 seconds
+[ INFO] [1570501705.411225136]: QR conversion took  1.231 seconds
+[ INFO] [1570501707.142505920]: QR conversion took  1.276 seconds
+[ INFO] [1570501708.790604849]: QR conversion took  1.188 seconds
+[ INFO] [1570501710.443248553]: QR conversion took  1.202 seconds
+[ INFO] [1570501712.186212634]: QR conversion took  1.201 seconds
+[ INFO] [1570501713.854988056]: QR conversion took  1.189 seconds
+2 codes
+[ INFO] [1570501722.539115075]: QR conversion took  1.231 seconds
+[ INFO] [1570501724.194288233]: QR conversion took  1.200 seconds
+[ INFO] [1570501725.879858591]: QR conversion took  1.200 seconds
+[ INFO] [1570501727.618026039]: QR conversion took  1.274 seconds
+[ INFO] [1570501729.396344592]: QR conversion took  1.338 seconds
+[ INFO] [1570501731.119519033]: QR conversion took  1.235 seconds
+[ INFO] [1570501732.921860647]: QR conversion took  1.234 seconds
+[ INFO] [1570501734.639844575]: QR conversion took  1.243 seconds
+[ INFO] [1570501736.378218275]: QR conversion took  1.242 seconds
+[ INFO] [1570501738.104392552]: QR conversion took  1.271 seconds
+[ INFO] [1570501739.851624198]: QR conversion took  1.236 seconds
+[ INFO] [1570501741.546603598]: QR conversion took  1.220 seconds
+[ INFO] [1570501743.201527780]: QR conversion took  1.194 seconds
+[ INFO] [1570501744.940949841]: QR conversion took  1.196 seconds
+[ INFO] [1570501746.618416997]: QR conversion took  1.219 seconds
+-->
+
+  <node name="Paddington" pkg="cv_barcode" type="cv_barcode_node" output="screen" >
+    <remap from="image" to="/raspicam_node/image" />
+    <remap from="camera_info" to="/raspicam_node/camera_info" />
+  </node>
+
+  <!-- Look for april tags as landmarks. 
+1280x960:
+0 codes
+[ INFO] [1570501570.427751098]: Apriltag conversion took  2.209 seconds
+[ INFO] [1570501573.195635307]: Apriltag conversion took  2.393 seconds
+[ INFO] [1570501575.967443668]: Apriltag conversion took  2.368 seconds
+[ INFO] [1570501578.830933135]: Apriltag conversion took  2.456 seconds
+[ INFO] [1570501581.495109025]: Apriltag conversion took  2.239 seconds
+1 code
+[ INFO] [1570501584.119574390]: Apriltag conversion took  2.223 seconds
+[ INFO] [1570501586.830936614]: Apriltag conversion took  2.313 seconds
+[ INFO] [1570501589.578914649]: Apriltag conversion took  2.351 seconds
+[ INFO] [1570501592.373564954]: Apriltag conversion took  2.355 seconds
+[ INFO] [1570501595.175084031]: Apriltag conversion took  2.375 seconds
+[ INFO] [1570501597.891179791]: Apriltag conversion took  2.281 seconds
+[ INFO] [1570501600.590445224]: Apriltag conversion took  2.269 seconds
+[ INFO] [1570501603.260174818]: Apriltag conversion took  2.249 seconds
+
+-->
+  <!-- Set parameters (1 thread) -->
+  <rosparam command="load" file="$(find apriltag_ros)/config/settings.yaml" ns="Farringdon" />
+  <rosparam command="load" file="$(find apriltag_ros)/config/tags.yaml" ns="Farringdon" />
+  
+  <!-- Remap topics from those used in code to those on the ROS network 
+  <node pkg="apriltag_ros" type="apriltag_ros_continuous_node" name="Farringdon" clear_params="true" output="screen" >
+    <remap from="image_rect" to="/raspicam_node/image" />
+    <remap from="camera_info" to="/raspicam_node/camera_info" />
+
+    <param name="camera_frame" type="str" value="camera" />
+    <param name="publish_tag_detections_image" type="bool" value="true" />
+  </node>-->
+
+  <!-- Raspberry Pi Camera V2 -->
+  <include file="$(find raspicam_node)/launch/camerav2_1280x960_10fps.launch">
+    <arg name="enable_raw" value="false"/>
+  </include>
+
+
+</launch>
+
