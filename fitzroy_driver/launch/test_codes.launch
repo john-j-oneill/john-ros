@@ -34,6 +34,83 @@
 [ INFO] [1570501743.201527780]: QR conversion took  1.194 seconds
 [ INFO] [1570501744.940949841]: QR conversion took  1.196 seconds
 [ INFO] [1570501746.618416997]: QR conversion took  1.219 seconds
+
+410x308:
+0 codes
+[ INFO] [1570535346.846453884]: QR conversion took  0.083 seconds
+[ INFO] [1570535346.990021432]: QR conversion took  0.089 seconds
+[ INFO] [1570535347.118722303]: QR conversion took  0.090 seconds
+[ INFO] [1570535347.239386801]: QR conversion took  0.085 seconds
+[ INFO] [1570535347.376095471]: QR conversion took  0.085 seconds
+[ INFO] [1570535347.521732132]: QR conversion took  0.085 seconds
+[ INFO] [1570535347.646563518]: QR conversion took  0.088 seconds
+[ INFO] [1570535347.784061920]: QR conversion took  0.090 seconds
+[ INFO] [1570535347.910326470]: QR conversion took  0.088 seconds
+[ INFO] [1570535348.053280727]: QR conversion took  0.087 seconds
+[ INFO] [1570535348.180389755]: QR conversion took  0.082 seconds
+[ INFO] [1570535348.319727373]: QR conversion took  0.086 seconds
+[ INFO] [1570535348.442056287]: QR conversion took  0.089 seconds
+[ INFO] [1570535348.580515266]: QR conversion took  0.089 seconds
+1 code
+[ INFO] [1570535353.278619063]: QR conversion took  0.122 seconds
+[ INFO] [1570535353.457513239]: QR conversion took  0.126 seconds
+[ INFO] [1570535353.632122547]: QR conversion took  0.122 seconds
+[ INFO] [1570535353.813393062]: QR conversion took  0.122 seconds
+[ INFO] [1570535353.991672346]: QR conversion took  0.123 seconds
+[ INFO] [1570535354.147862563]: QR conversion took  0.122 seconds
+[ INFO] [1570535354.316506775]: QR conversion took  0.131 seconds
+[ INFO] [1570535354.497949396]: QR conversion took  0.136 seconds
+[ INFO] [1570535354.655996747]: QR conversion took  0.123 seconds
+[ INFO] [1570535354.815945648]: QR conversion took  0.123 seconds
+[ INFO] [1570535354.983482262]: QR conversion took  0.130 seconds
+[ INFO] [1570535355.142789503]: QR conversion took  0.121 seconds
+[ INFO] [1570535355.320690138]: QR conversion took  0.122 seconds
+[ INFO] [1570535355.480005151]: QR conversion took  0.122 seconds
+[ INFO] [1570535355.657975317]: QR conversion took  0.123 seconds
+[ INFO] [1570535355.820764425]: QR conversion took  0.123 seconds
+2 codes
+[ INFO] [1570535359.271608526]: QR conversion took  0.212 seconds
+[ INFO] [1570535359.492155206]: QR conversion took  0.171 seconds
+[ INFO] [1570535359.752219429]: QR conversion took  0.230 seconds
+[ INFO] [1570535360.005349775]: QR conversion took  0.188 seconds
+[ INFO] [1570535360.151376822]: QR conversion took  0.119 seconds
+[ INFO] [1570535360.418214870]: QR conversion took  0.235 seconds
+[ INFO] [1570535360.633357697]: QR conversion took  0.181 seconds
+[ INFO] [1570535360.917637502]: QR conversion took  0.220 seconds
+[ INFO] [1570535361.183374370]: QR conversion took  0.232 seconds
+[ INFO] [1570535361.450008875]: QR conversion took  0.226 seconds
+[ INFO] [1570535361.671945043]: QR conversion took  0.187 seconds
+[ INFO] [1570535361.907409550]: QR conversion took  0.182 seconds
+[ INFO] [1570535362.144370717]: QR conversion took  0.185 seconds
+[ INFO] [1570535362.399928428]: QR conversion took  0.195 seconds
+[ INFO] [1570535362.653579999]: QR conversion took  0.182 seconds
+[ INFO] [1570535362.895125930]: QR conversion took  0.209 seconds
+[ INFO] [1570535363.095962277]: QR conversion took  0.169 seconds
+
+1920x1080:
+0 codes
+[ INFO] [1570537399.290061350]: QR conversion took  0.819 seconds
+[ INFO] [1570537400.980707564]: QR conversion took  0.862 seconds
+[ INFO] [1570537402.097515599]: QR conversion took  0.705 seconds
+[ INFO] [1570537403.405283328]: QR conversion took  0.846 seconds
+[ INFO] [1570537404.683785114]: QR conversion took  0.814 seconds
+1 code
+[ INFO] [1570537406.268955654]: QR conversion took  1.208 seconds
+[ INFO] [1570537408.125956752]: QR conversion took  1.209 seconds
+[ INFO] [1570537409.663505004]: QR conversion took  1.183 seconds
+[ INFO] [1570537411.294158193]: QR conversion took  1.186 seconds
+[ INFO] [1570537412.838030228]: QR conversion took  1.127 seconds
+[ INFO] [1570537414.453485888]: QR conversion took  1.174 seconds
+2 codes
+[ INFO] [1570537421.096822646]: QR conversion took  1.236 seconds
+[ INFO] [1570537422.754705732]: QR conversion took  1.186 seconds
+[ INFO] [1570537424.321692616]: QR conversion took  1.187 seconds
+[ INFO] [1570537425.962088077]: QR conversion took  1.183 seconds
+[ INFO] [1570537427.607769149]: QR conversion took  1.196 seconds
+[ INFO] [1570537429.356275134]: QR conversion took  1.269 seconds
+[ INFO] [1570537430.990512909]: QR conversion took  1.182 seconds
+[ INFO] [1570537432.746156766]: QR conversion took  1.264 seconds
+[ INFO] [1570537434.369080935]: QR conversion took  1.256 seconds
 -->
 
   <node name="Paddington" pkg="cv_barcode" type="cv_barcode_node" output="screen" >
@@ -59,6 +136,61 @@
 [ INFO] [1570501600.590445224]: Apriltag conversion took  2.269 seconds
 [ INFO] [1570501603.260174818]: Apriltag conversion took  2.249 seconds
 
+410x308:
+0 codes
+[ INFO] [1570535483.379236122]: Apriltag conversion took  0.124 seconds
+[ INFO] [1570535483.543972423]: Apriltag conversion took  0.128 seconds
+[ INFO] [1570535483.683632775]: Apriltag conversion took  0.116 seconds
+[ INFO] [1570535483.837950982]: Apriltag conversion took  0.118 seconds
+[ INFO] [1570535483.974739723]: Apriltag conversion took  0.117 seconds
+[ INFO] [1570535484.123296015]: Apriltag conversion took  0.112 seconds
+[ INFO] [1570535484.259600015]: Apriltag conversion took  0.113 seconds
+[ INFO] [1570535484.401468434]: Apriltag conversion took  0.117 seconds
+[ INFO] [1570535484.543529252]: Apriltag conversion took  0.122 seconds
+[ INFO] [1570535484.697707829]: Apriltag conversion took  0.121 seconds
+[ INFO] [1570535484.840011515]: Apriltag conversion took  0.123 seconds
+[ INFO] [1570535485.030878639]: Apriltag conversion took  0.147 seconds
+[ INFO] [1570535485.164536038]: Apriltag conversion took  0.115 seconds
+[ INFO] [1570535485.333616234]: Apriltag conversion took  0.127 seconds
+[ INFO] [1570535485.475432889]: Apriltag conversion took  0.099 seconds
+1 code
+[ INFO] [1570535485.630442947]: Apriltag conversion took  0.118 seconds
+[ INFO] [1570535485.826631629]: Apriltag conversion took  0.153 seconds
+[ INFO] [1570535485.997211382]: Apriltag conversion took  0.148 seconds
+[ INFO] [1570535486.164133580]: Apriltag conversion took  0.142 seconds
+[ INFO] [1570535486.328201042]: Apriltag conversion took  0.142 seconds
+[ INFO] [1570535486.484770875]: Apriltag conversion took  0.134 seconds
+[ INFO] [1570535486.655227197]: Apriltag conversion took  0.126 seconds
+[ INFO] [1570535486.808656351]: Apriltag conversion took  0.133 seconds
+[ INFO] [1570535486.994934144]: Apriltag conversion took  0.150 seconds
+[ INFO] [1570535487.156403705]: Apriltag conversion took  0.141 seconds
+[ INFO] [1570535487.336084518]: Apriltag conversion took  0.144 seconds
+[ INFO] [1570535487.506218968]: Apriltag conversion took  0.149 seconds
+[ INFO] [1570535487.690018238]: Apriltag conversion took  0.147 seconds
+[ INFO] [1570535487.860335713]: Apriltag conversion took  0.149 seconds
+
+1920x1080:
+0 codes
+[ INFO] [1570537304.036081448]: Apriltag conversion took  1.809 seconds
+[ INFO] [1570537305.881607093]: Apriltag conversion took  1.474 seconds
+[ INFO] [1570537307.045029488]: Apriltag conversion took  0.975 seconds
+[ INFO] [1570537308.954871593]: Apriltag conversion took  1.795 seconds
+[ INFO] [1570537310.800279908]: Apriltag conversion took  1.492 seconds
+[ INFO] [1570537313.297763870]: Apriltag conversion took  1.991 seconds
+[ INFO] [1570537314.819728815]: Apriltag conversion took  1.164 seconds
+[ INFO] [1570537317.113326391]: Apriltag conversion took  1.971 seconds
+[ INFO] [1570537318.683387079]: Apriltag conversion took  1.208 seconds
+[ INFO] [1570537320.934784721]: Apriltag conversion took  1.974 seconds
+[ INFO] [1570537322.717840881]: Apriltag conversion took  1.428 seconds
+1 code
+[ INFO] [1570537324.786856596]: Apriltag conversion took  1.713 seconds
+[ INFO] [1570537326.393065311]: Apriltag conversion took  1.248 seconds
+[ INFO] [1570537328.590052293]: Apriltag conversion took  1.894 seconds
+[ INFO] [1570537330.294755059]: Apriltag conversion took  1.334 seconds
+[ INFO] [1570537332.411688904]: Apriltag conversion took  1.831 seconds
+[ INFO] [1570537334.147488368]: Apriltag conversion took  1.367 seconds
+[ INFO] [1570537336.253530683]: Apriltag conversion took  1.869 seconds
+
 -->
   <!-- Set parameters (1 thread) -->
   <rosparam command="load" file="$(find apriltag_ros)/config/settings.yaml" ns="Farringdon" />
@@ -73,8 +205,8 @@
     <param name="publish_tag_detections_image" type="bool" value="true" />
   </node>-->
 
-  <!-- Raspberry Pi Camera V2 -->
-  <include file="$(find raspicam_node)/launch/camerav2_1280x960_10fps.launch">
+  <!-- Raspberry Pi Camera V2 camerav2_1280x960_10fps.launch -->
+  <include file="$(find raspicam_node)/launch/camerav2_1920x1080_10fps.launch">
     <arg name="enable_raw" value="false"/>
   </include>
 
