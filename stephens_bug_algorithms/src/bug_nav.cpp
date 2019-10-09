@@ -19,27 +19,19 @@
 /// The node is publishing a geometry_msgs/Twist
 ros::Publisher pub_cmd_vel, pub_state;
 
-/// Define all #defines here!
-#define RAD2DEG (180/M_PI)
-#define MAX_LIN_VEL 1.5
-#define MAX_ANG_VEL 0.675
-#define SAFE_WALL_DISTANCE 1.0
-#define WALL_ANG_TO_RIGHT (-M_PI/2)
-#define MIN_LIN_VEL 0.25
-#define SAFE_WALL_APPROACH_DISTANCE (1.25*SAFE_WALL_DISTANCE)
-#define ALPHA (1.0/7.0)
-#define KP (-70.0)
-#define WALL_ANGLE_ERROR_THRESHOLD 0.1
-#define WALL_DIST_ERROR_THRESHOLD 0.001
-#define TARGET_SQUARE_THRESH 0.5
-
-
 /// Params
 bool  verbose = false;
+float targetPropelSpeed = 0.75; /// m/s
+float slowPropelSpeed = 0.25; /// m/s
+float maxAngularVelocity = 0.6; /// rad/s
 float angleKp = -0.675;
 float sLineThreshold = 0.1; /// This is the threshold to determine if you are close enough to the S-Line yet
 float startingSquareThresh = 0.3; /// This is to tell if you have circumnavigated (re-entered the starting box)
+float targetSquareThresh = 0.5; /// This is to tell if you have reached the target
 float lookaheadDistance = 2.0; /// How far ahead to steer towards
+float targetWallDistance = 1.0; /// metres
+float targetWallAngle = (-M_PI/2); /// radians
+float wallApproachDistance = 1.25*targetWallDistance; /// metres
 
 /// Define global variables
 geometry_msgs::Twist cmd_vel;
@@ -194,6 +186,7 @@ void targetScanCallback(const nav_msgs::Odometry::ConstPtr& targetScan){
         path.length = distance_to_pt(path.start,path.end);
         ROS_INFO("Got new target of x=%6.3f,y=%6.3f",path.end.x,path.end.y);
         do_i_know_target = true;
+        robot_state = FINDING_SLINE;
     }
 }
 
@@ -240,7 +233,7 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
 
     /// Check to see if a wall is in front (Scan only thetas from -M_PI/4 to M_PI/4)
     for(int ii = floor((-M_PI/4.0-baseScan->angle_min)/baseScan->angle_increment); ii < floor((M_PI/4.0-baseScan->angle_min)/baseScan->angle_increment); ii++){
-        if(baseScan->ranges[ii] < SAFE_WALL_APPROACH_DISTANCE){
+        if(baseScan->ranges[ii] < wallApproachDistance){
             wallInFront = true;
             break;
         }
@@ -250,7 +243,7 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
     }
 
     /// Check to see if the robot is within the wall approach distance to detect the wall
-    if (min_dist <= SAFE_WALL_APPROACH_DISTANCE && robot_state != FINDING_SLINE && (min_theta > -(M_PI/2) && min_theta < (M_PI/2)) && wallInFront){
+    if (min_dist <= wallApproachDistance && robot_state != FINDING_SLINE && (min_theta > -(M_PI/2) && min_theta < (M_PI/2)) && wallInFront){
         robot_state = FINDING_WALL;
         wall_follow_start = robot_pose.pos;
         max_distance_from_wall_follow_start = 0.f;
@@ -264,8 +257,8 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
         pub_cmd_vel.publish(cmd_vel);
 
         /// Calculate errors for "parallelness" to the wall and distance from wall
-        wallAngleError = (min_theta - WALL_ANG_TO_RIGHT);
-        wallDistError = -(min_dist - SAFE_WALL_DISTANCE);
+        wallAngleError = (min_theta - targetWallAngle);
+        wallDistError = -(min_dist - targetWallDistance);
 
         if (robot_state == FINDING_WALL && std::fabs(wallAngleError) < sLineThreshold)
         {
@@ -276,19 +269,19 @@ void baseScanCallback(const sensor_msgs::LaserScan::ConstPtr& baseScan){
 
             cmd_vel.linear.x = 0.0;
             cmd_vel.angular.z = wallAngleError*angleKp;
-            if( cmd_vel.angular.z > MAX_ANG_VEL){
-                cmd_vel.angular.z = MAX_ANG_VEL;
+            if( cmd_vel.angular.z > maxAngularVelocity){
+                cmd_vel.angular.z = maxAngularVelocity;
             }
-            if( cmd_vel.angular.z <-MAX_ANG_VEL){
-                cmd_vel.angular.z =-MAX_ANG_VEL;
+            if( cmd_vel.angular.z <-maxAngularVelocity){
+                cmd_vel.angular.z =-maxAngularVelocity;
             }
         }else{
             float radius = corrective_radius(wallDistError,wallAngleError,lookaheadDistance);
             ROS_INFO_COND(verbose,"Following Wall. Angle error = %6.3frad, Tracking error = %6.3fm, Radius = %6.3fm",wallAngleError,wallDistError,radius);
             if(wallInFront){
-                cmd_vel.linear.x = MIN_LIN_VEL;
+                cmd_vel.linear.x = slowPropelSpeed;
             }else{
-                cmd_vel.linear.x = 0.5*MAX_LIN_VEL;
+                cmd_vel.linear.x = targetPropelSpeed;
             }
             cmd_vel.angular.z = -radius_to_yawrate(radius,cmd_vel.linear.x);
         }
@@ -332,7 +325,7 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
             robot_state = MOVING_ON_SLINE;
         }
     }
-    if(t.distance < TARGET_SQUARE_THRESH){
+    if(t.distance < targetSquareThresh){
         /// WE MADE IT TO THE GOAL!
         ROS_INFO_COND(robot_state != REACHED_GOAL,"MADE IT TO THE GOAL!!");
         robot_state = REACHED_GOAL;
@@ -347,11 +340,11 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
         ROS_INFO_COND(verbose,"FINDING S-LINE. Angle error = %6.3frad",t.angle_error);
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = t.angle_error*angleKp;
-        if( cmd_vel.angular.z > MAX_ANG_VEL){
-            cmd_vel.angular.z = MAX_ANG_VEL;
+        if( cmd_vel.angular.z > maxAngularVelocity){
+            cmd_vel.angular.z = maxAngularVelocity;
         }
-        if( cmd_vel.angular.z <-MAX_ANG_VEL){
-            cmd_vel.angular.z =-MAX_ANG_VEL;
+        if( cmd_vel.angular.z <-maxAngularVelocity){
+            cmd_vel.angular.z =-maxAngularVelocity;
         }
     }
     /// Move along the S-Line
@@ -359,9 +352,9 @@ void gpsScanCallback(const nav_msgs::Odometry::ConstPtr& gpsScan){
 
         ROS_INFO_COND(verbose,"ON THE S-LINE. Angle error = %6.3frad, Tracking error = %6.3fm, Radius = %6.3fm",t.angle_error,t.tracking_error,t.corrective_radius);
         if(wallInFront){
-            cmd_vel.linear.x = MIN_LIN_VEL;
+            cmd_vel.linear.x = slowPropelSpeed;
         }else{
-            cmd_vel.linear.x = 0.5*MAX_LIN_VEL;
+            cmd_vel.linear.x = targetPropelSpeed;
         }
         cmd_vel.angular.z = -radius_to_yawrate(t.corrective_radius,cmd_vel.linear.x);
     }
@@ -418,10 +411,24 @@ int main(int argc, char **argv)
 
     /// Setup a ROS node handle (nh_)
     ros::NodeHandle nh_;
+    ros::NodeHandle pnh_("~");
 
     /// Publisher object that decides what kind of topic to publish and how fast.
     pub_cmd_vel = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
     pub_state   = nh_.advertise<std_msgs::Int8>("/bug_state", 1);
+
+    pnh_.getParam("verbose",verbose);
+    pnh_.getParam("target_propel_speed",targetPropelSpeed);
+    pnh_.getParam("slow_propel_speed",slowPropelSpeed);
+    pnh_.getParam("max_angular_velocity",maxAngularVelocity);
+    pnh_.getParam("angle_kp",angleKp);
+    pnh_.getParam("sline_threshold",sLineThreshold);
+    pnh_.getParam("starting_square_threshold",startingSquareThresh);
+    pnh_.getParam("target_square_threshold",targetSquareThresh);
+    pnh_.getParam("lookahead_distance",lookaheadDistance);
+    pnh_.getParam("target_wall_distance",targetWallDistance);
+    pnh_.getParam("target_wall_angle",targetWallAngle);
+    pnh_.getParam("wall_approach_distance",wallApproachDistance);
 
     /// Setup up the subscribers
     ros::Subscriber sub_gps_target = nh_.subscribe("/target_pose_ground_truth",1,targetScanCallback); /// Subscribe to target pos

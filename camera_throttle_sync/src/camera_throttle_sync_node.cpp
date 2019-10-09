@@ -16,17 +16,23 @@ class FrameSync
     ros::Time last_frame;
     float target_framerate;
     bool need_new_frame;
+    bool timesync;
 
 public:
   FrameSync()
     : it_(nh_), target_framerate(1.0), need_new_frame(false)
   {
-    std::string image_topic = nh_.resolveName("image1");
-    sub1_ = it_.subscribeCamera(image_topic, 1, &FrameSync::imageCb1, this);
+    std::string hints = "compressed";
+    pnh_.getParam("hints", hints);
+
+    std::string image_topic1 = nh_.resolveName("image1");
+    image_transport::TransportHints hints1(hints);
+    sub1_ = it_.subscribeCamera(image_topic1, 1, &FrameSync::imageCb1, this, hints1);
     pub1_ = it_.advertiseCamera("image_out1", 1);
 
     std::string image_topic2 = nh_.resolveName("image2");
-    sub2_ = it_.subscribeCamera(image_topic2, 1, &FrameSync::imageCb2, this);
+    image_transport::TransportHints hints2(hints);
+    sub2_ = it_.subscribeCamera(image_topic2, 1, &FrameSync::imageCb2, this, hints2);
     pub2_ = it_.advertiseCamera("image_out2", 1);
 
     pnh_ = ros::NodeHandle("~");
@@ -34,6 +40,7 @@ public:
     /// Target framerate, in frames/sec.
     /// A target framerate>1000fps means keep everything.
     pnh_.getParam("target_framerate", target_framerate);
+    pnh_.getParam("timesync", timesync);
 
     last_frame = ros::Time::now();
   }
@@ -44,7 +51,17 @@ public:
   {
       /// Only publish if we recently got a frame from the other camera.
       if(need_new_frame || target_framerate>1000.0){
-          pub2_.publish(image_msg,info_msg);
+          if(timesync)
+          {
+              /// Make a local copy so we can change the timestamp
+              sensor_msgs::Image image_copy = *(image_msg);
+              sensor_msgs::CameraInfo info_copy = *(info_msg);
+              image_copy.header.stamp = last_frame;
+              info_copy.header.stamp = last_frame;
+              pub2_.publish(image_copy,info_copy);
+          }else{
+              pub2_.publish(image_msg,info_msg);
+          }
           need_new_frame=false;
       }
   }
@@ -52,10 +69,10 @@ public:
   void imageCb1(const sensor_msgs::ImageConstPtr& image_msg,
                 const sensor_msgs::CameraInfoConstPtr& info_msg)
   {
-      ros::Duration dt = ros::Time::now()-last_frame;
+      ros::Duration dt = image_msg->header.stamp-last_frame;
       if(dt.toSec()>1.0/target_framerate || target_framerate>1000.0){
           pub1_.publish(image_msg,info_msg);
-          last_frame = ros::Time::now();
+          last_frame = image_msg->header.stamp;
           /// Tell the other camera we are ready to get an image
           /// This isn't the most accurate way to sync, but should give roughly synchronized images
           need_new_frame=true;
