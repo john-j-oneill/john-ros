@@ -207,9 +207,11 @@ public:
     // wrap image data
     zbar::Image zimage(width, height, "Y800", raw, width * height);
     // scan the image for barcodes'
-tic(0);
+    tic(0);
     int n = scanner_.scan(zimage);
-ROS_INFO("QR conversion took %6.3f seconds",toc(0));
+    if(debug_){
+        ROS_INFO("QR conversion took %6.3f seconds",toc(0));
+    }
     int symbols = 0;
 
     geometry_msgs::PoseArray pose_msg;
