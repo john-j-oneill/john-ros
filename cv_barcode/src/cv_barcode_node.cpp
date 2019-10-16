@@ -57,7 +57,6 @@ public:
     std::string image_topic = nh_.resolveName("image");
     image_transport::TransportHints hints(image_transport_hints);
     sub_ = it_.subscribeCamera(image_topic, 1, &BarCodeFinder::imageCb, this, hints);
-    pub_ = it_.advertise("image_out", 1);
     pub_points_out_ = nh_.advertise<geometry_msgs::PoseArray>("qrcodes", 1);
     pub_trans_out_ = nh_.advertise<geometry_msgs::TransformStamped>("qrcode_trans", 10);
 
@@ -67,6 +66,11 @@ public:
     pnh.getParam("debug", debug_);
     pnh.getParam("qr_real_width_map", qr_real_width_map_);
     pnh.getParam("qr_text_in_frameid", qr_text_in_frameid_);
+
+    if(publish_image_)
+    {
+        pub_ = it_.advertise("image_out", 1);
+    }
 
     scanner_.set_config(zbar::ZBAR_NONE, zbar::ZBAR_CFG_ENABLE, 0);
     scanner_.set_config(zbar::ZBAR_QRCODE, zbar::ZBAR_CFG_ENABLE, 1);
