@@ -49,15 +49,18 @@ public:
   BarCodeFinder(void)
     : it_(nh_)
   {
+    /// Private node handle for params.
+    ros::NodeHandle pnh("~");
+    std::string image_transport_hints="compressed";
+    pnh.getParam("image_transport_hints", image_transport_hints);
+
     std::string image_topic = nh_.resolveName("image");
-    image_transport::TransportHints hints("compressed");
+    image_transport::TransportHints hints(image_transport_hints);
     sub_ = it_.subscribeCamera(image_topic, 1, &BarCodeFinder::imageCb, this, hints);
     pub_ = it_.advertise("image_out", 1);
     pub_points_out_ = nh_.advertise<geometry_msgs::PoseArray>("qrcodes", 1);
     pub_trans_out_ = nh_.advertise<geometry_msgs::TransformStamped>("qrcode_trans", 10);
 
-    /// Private node handle for params.
-    ros::NodeHandle pnh("~");
     pnh.getParam("display_image", display_image_);
     pnh.getParam("publish_image", publish_image_);
     pnh.getParam("publish_tf", publish_tf_);
