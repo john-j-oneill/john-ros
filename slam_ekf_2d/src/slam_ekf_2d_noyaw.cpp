@@ -61,8 +61,7 @@ enum robot_state{
 enum landmark_state{
     LANDMARK_X=0,
     LANDMARK_Y=1,
-    LANDMARK_P=2,
-    LANDMARK_SIZE=3
+    LANDMARK_SIZE=2
 };
 
 const int UNSURE = -1;
@@ -159,15 +158,17 @@ void publish_landmark_tf(const ros::TimerEvent&)
         robot_pose.transform.translation.x=state[ROBOT_SIZE+ii*LANDMARK_SIZE+LANDMARK_X];
         robot_pose.transform.translation.y=state[ROBOT_SIZE+ii*LANDMARK_SIZE+LANDMARK_Y];
 
-        geometry_msgs::Quaternion robot_quat = tf::createQuaternionMsgFromYaw(state[ROBOT_SIZE+ii*LANDMARK_SIZE+LANDMARK_P]);
-        robot_pose.transform.rotation=robot_quat;
+        robot_pose.transform.rotation.x=0.0;
+        robot_pose.transform.rotation.y=0.0;
+        robot_pose.transform.rotation.z=0.0;
+        robot_pose.transform.rotation.w=1.0;
         pose_broadcaster->sendTransform(robot_pose);
     }
 }
 
 int get_feature_index(std::string id)
 {
-    int feature_index = UNSURE;
+    int feature_index = NEW_FEATURE;
     int num_features = (state.size()-ROBOT_SIZE)/LANDMARK_SIZE;         /// Current number of features in the state vector
     
     /// Loop through all of the features in the entire state vector to figure out if you have seen the feature previously
@@ -203,7 +204,6 @@ void initializeSlam(float distance_noise,float bearing_noise,float phi_noise,flo
     R = Eigen::MatrixXf::Identity(LANDMARK_SIZE,LANDMARK_SIZE);
     R(LANDMARK_X,LANDMARK_X) = distance_noise; // Distance noise
     R(LANDMARK_Y,LANDMARK_Y) = bearing_noise;  // Bearing noise
-    R(LANDMARK_P,LANDMARK_P) = phi_noise;      // Phi noise
 
     /// Set robot pose to 0,0,0
     resetSlam();
@@ -239,83 +239,9 @@ Eigen::MatrixXf Get_R_mapped(geometry_msgs::Point32 pt)
     G_update(0,1) = -feature_d*std::sin(feature_th);
     G_update(1,0) = std::sin(feature_th);
     G_update(1,1) = feature_d*std::cos(feature_th);
-    G_update(0,2) = 0.0;
-    G_update(1,2) = 0.0;
-    G_update(2,2) = 1.0;
-    G_update(2,0) = 0.0;
-    G_update(2,1) = 0.0;
     R_mapped = G_update*R*G_update.transpose();
     
     return R_mapped;
-}
-
-void add_feature(geometry_msgs::Point32 pt,float phi, std::string current_landmark_id)
-{
-    /// We have a new feature!!
-    ///
-    /// Get the angle of the robot state from the state vector
-    Eigen::Matrix2f C = Get_C(state[ROBOT_P]);
-
-    Eigen::MatrixXf Rp = Get_R_mapped(pt);
-    
-    //float mahalanobis_current_min = std::numeric_limits<float>::max();
-    Eigen::Vector2f robot_state = state.head(ROBOT_Y+1);        /// Current robot state (x and y)
-    Eigen::Vector3f z_m;                                    	/// This is the measurement of the feature in robot frame
-    /// Define the actual measurement in a vector
-    z_m(LANDMARK_X) = pt.x;
-    z_m(LANDMARK_Y) = pt.y;
-    z_m(LANDMARK_P) = phi;
-
-    /// Update the state vector by adding in the new feature (x,y,phi)
-    Eigen::Vector2f feature_update_x_y;
-    feature_update_x_y = C*z_m.head(LANDMARK_Y+1) + robot_state;
-    state.conservativeResize(state.rows()+LANDMARK_SIZE);  /// Resize the state vector to make space for the new feature (x,y,phi)
-    state(state.rows()-LANDMARK_SIZE + LANDMARK_X) = feature_update_x_y(LANDMARK_X);
-    state(state.rows()-LANDMARK_SIZE + LANDMARK_Y) = feature_update_x_y(LANDMARK_Y);
-    state(state.rows()-LANDMARK_SIZE + LANDMARK_P) = state(ROBOT_P) + z_m(LANDMARK_P);
-
-
-    /// Update the covariance
-    /// Calculate H_r and H_l
-    Eigen::MatrixXf H_r((int)LANDMARK_SIZE,(int)ROBOT_SIZE);
-    H_r.block(LANDMARK_X,ROBOT_X,LANDMARK_Y+1,ROBOT_Y+1) = -C.transpose();
-    H_r.block(LANDMARK_X,ROBOT_P,LANDMARK_Y+1,1) = -C.transpose()*J*(C*z_m.head(LANDMARK_Y+1));
-    H_r(2,0) = 0.0;
-    H_r(2,1) = 0.0;
-    H_r(2,2) = -1.0;
-    Eigen::MatrixXf H_l((int)LANDMARK_SIZE,(int)LANDMARK_SIZE);
-    H_l.block(LANDMARK_X,LANDMARK_X,LANDMARK_Y+1,LANDMARK_Y+1) = C.transpose();
-    H_l(0,2) = 0.0;
-    H_l(1,2) = 0.0;
-    H_l(LANDMARK_P,LANDMARK_P) = 1.0;
-    H_l(LANDMARK_P,0) = 0.0;
-    H_l(LANDMARK_P,1) = 0.0;
-
-
-    //std::cout << "Covariance Before: " << covariance << std::endl;
-
-    /// Segment out the covariance matrix of just the robot
-    Eigen::Matrix3f P_rr = covariance.block<ROBOT_SIZE,ROBOT_SIZE>(0,0);
-
-    /// Calculate the off-diagonal block
-    int cov_rows = covariance.rows();
-    Eigen::MatrixXf cross_term = -covariance.block(0,0,cov_rows,LANDMARK_SIZE)*H_r.transpose()*H_l;
-
-    /// Populate new covariance matrix
-    covariance.conservativeResize(cov_rows+LANDMARK_SIZE,cov_rows+LANDMARK_SIZE); /// Resize the covariance matrix to add 3 more rows and cols
-    covariance.block(0,cov_rows,cov_rows,LANDMARK_SIZE) = cross_term;
-    covariance.block(cov_rows,0,LANDMARK_SIZE,cov_rows) = cross_term.transpose();
-    covariance.block(cov_rows,cov_rows,LANDMARK_SIZE,LANDMARK_SIZE) = H_l.transpose()*(H_r*P_rr*H_r.transpose() + Rp)*H_l;
-
-
-    //std::cout << "Covariance After: " << covariance << std::endl;
-
-
-    /// Add the new id to the array
-    landmark_ids.push_back(current_landmark_id);
-
-    /// Print statement
-//    std::cout << "We added a new feature to the state vector, we now have: " << covariance.cols() << " states" << std::endl;
 }
 
 /// Mahalanobis distance function
@@ -376,7 +302,7 @@ int Mahalanobis_dist(Eigen::MatrixXf Rp, geometry_msgs::Point32 pt, Eigen::Matri
     }
 
     /// Figure out if the mahalanobis distance is good for the update, new feature, or nothing
-    if (mahalanobis_current_min > new_feature_thresh && feature_index>UNSURE){
+    if ((mahalanobis_current_min > new_feature_thresh && feature_index>UNSURE) || num_features==0){
         /// We have a new feature!!
         ROS_INFO_COND(DEBUG,"Found new feature, closest feature mahalanobis_current_min=%f",mahalanobis_current_min);
         feature_index = NEW_FEATURE;    }
@@ -393,7 +319,73 @@ int Mahalanobis_dist(Eigen::MatrixXf Rp, geometry_msgs::Point32 pt, Eigen::Matri
     return feature_index;
 }
 
-void update_feature(geometry_msgs::Point32 pt, float phi, int feature_index)
+
+void add_feature(geometry_msgs::Point32 pt, std::string current_landmark_id)
+{
+    /// We have a new feature!!
+    int num_features = (state.size()-ROBOT_SIZE)/LANDMARK_SIZE;     /// Current number of features in the state vector
+    ///
+    /// Get the angle of the robot state from the state vector
+    Eigen::Matrix2f C = Get_C(state[ROBOT_P]);
+
+    Eigen::MatrixXf Rp = Get_R_mapped(pt);
+    
+    //float mahalanobis_current_min = std::numeric_limits<float>::max();
+    Eigen::Vector2f robot_state = state.head(ROBOT_Y+1);        /// Current robot state (x and y)
+    Eigen::Vector2f z_m;                                        /// This is the measurement of the feature in robot frame
+    /// Define the actual measurement in a vector
+    z_m(LANDMARK_X) = pt.x;
+    z_m(LANDMARK_Y) = pt.y;
+
+    /// Update the state vector by adding in the new feature (x,y)
+    Eigen::Vector2f feature_update;
+    feature_update = C*z_m+robot_state;
+    state.conservativeResize(state.rows()+LANDMARK_SIZE);  /// Resize the state vector to make space for the new feature (x,y)
+    state(state.rows()-LANDMARK_SIZE + LANDMARK_X) = feature_update(LANDMARK_X);
+    state(state.rows()-LANDMARK_SIZE + LANDMARK_Y) = feature_update(LANDMARK_Y);
+
+
+    /// Update the covariance
+    /// Calculate H_r and H_l
+    Eigen::MatrixXf H_r((int)LANDMARK_SIZE,(int)ROBOT_SIZE);
+    H_r.block(LANDMARK_X,ROBOT_X,LANDMARK_Y+1,ROBOT_Y+1) = -C.transpose();
+    H_r.block(LANDMARK_X,ROBOT_P,LANDMARK_Y+1,1) = -C.transpose()*J*(C*z_m);
+    Eigen::MatrixXf H_l((int)LANDMARK_SIZE,(int)LANDMARK_SIZE);
+    H_l = C.transpose();
+
+    //std::cout << "Covariance Before: " << covariance << std::endl;
+
+    /// Segment out the covariance matrix of just the robot
+    Eigen::Matrix3f P_rr = covariance.block<ROBOT_SIZE,ROBOT_SIZE>(0,0);
+
+    /// Calculate the off-diagonal block
+    int cov_rows = covariance.rows();
+    Eigen::MatrixXf cross_term = -covariance.block(0,0,cov_rows,ROBOT_SIZE)*H_r.transpose()*H_l; //TODO check ROBOT_SIZE or LANDMARK_SIZE
+
+    /// Populate new covariance matrix
+    covariance.conservativeResize(cov_rows+LANDMARK_SIZE,cov_rows+LANDMARK_SIZE); /// Resize the covariance matrix to add 3 more rows and cols
+    covariance.block(0,cov_rows,cov_rows,LANDMARK_SIZE) = cross_term;
+    covariance.block(cov_rows,0,LANDMARK_SIZE,cov_rows) = cross_term.transpose();
+    covariance.block(cov_rows,cov_rows,LANDMARK_SIZE,LANDMARK_SIZE) = H_l.transpose()*(H_r*P_rr*H_r.transpose() + Rp)*H_l;
+
+
+    //std::cout << "Covariance After: " << covariance << std::endl;
+
+
+    /// Add the new id to the array
+    if(current_landmark_id.length()==0)
+    {
+        std::stringstream ss;
+        ss << "Landmark_" << num_features;
+        current_landmark_id = ss.str();
+    }
+    landmark_ids.push_back(current_landmark_id);
+
+    /// Print statement
+//    std::cout << "We added a new feature to the state vector, we now have: " << covariance.cols() << " states" << std::endl;
+}
+
+void update_feature(geometry_msgs::Point32 pt,int feature_index)
 {
     Eigen::MatrixXf R_mapped = Get_R_mapped(pt);
     
@@ -401,55 +393,12 @@ void update_feature(geometry_msgs::Point32 pt, float phi, int feature_index)
     Eigen::Matrix2f C = Get_C(state[ROBOT_P]);
 
     /// Define the actual measurement in a vector
-    Eigen::Vector3f z_m;
+    Eigen::Vector2f z_m;
     z_m(LANDMARK_X) = pt.x;
     z_m(LANDMARK_Y) = pt.y;
-    z_m(LANDMARK_P) = phi;
 
     /// Define the best measurement
-    Eigen::Vector2f z_hat_pos = C.transpose()*(state.segment(feature_index,2)-state.head(2)); /// This checks out: z_hat = C'*(p_l_hat - p_r_hat) Stergios notes 8.4 p.119
-
-    Eigen::Vector3f z_hat;
-    z_hat(LANDMARK_X) = z_hat_pos(LANDMARK_X);
-    z_hat(LANDMARK_Y) = z_hat_pos(LANDMARK_Y);
-    z_hat(LANDMARK_P) = state[feature_index + LANDMARK_P] - state[ROBOT_P];
-
-    /// Only bother to check mahalanobis distance if we want to try throwing out outlier updates.
-    /// If num_consecutive_errs<=0 then we would always proceed anyways, so save time by skipping the maths.
-    if(num_consecutive_errs>0)
-    {
-
-        /// Check Mahalanobis distance
-        int mahalanobis_feature_index = Mahalanobis_dist(R_mapped,pt,C);  /// Returns a feature_index of the feature in the state vector (-1 means unsure, -2 means new feature)
-
-        /// For now, we can just exit if we aren't sure it's a
-        if(mahalanobis_feature_index == NEW_FEATURE || mahalanobis_feature_index == UNSURE){
-            /// We saw the feature not quite where we expected
-            /// \todo Decide if UNSURE counts as an error for consecutive_err_count or not. If not, we could get stuck not quite seeing it but also not updating.
-            consecutive_err_count++;
-            float bearing_error=(std::atan2(pt.y,pt.x)-std::atan2(z_hat(LANDMARK_Y),z_hat(LANDMARK_X)))*180.0/M_PI;
-            float dist_error=std::sqrt(pow(pt.x-z_hat(LANDMARK_X),2)+pow(pt.y-z_hat(LANDMARK_Y),2));
-            ROS_INFO_COND(!reset_state,"Unexpected observation. Err %f deg, %f m.",bearing_error,dist_error);
-
-            /// Check for lots of errors
-            if(consecutive_err_count > num_consecutive_errs){
-                /// We haven't seen the feature where we thought we would AND we've seen it elsewhere a lot.
-                /// Maybe we ARE seeing the feature, we just have a bad state estimate
-                //ROS_WARN("Repeated unexpected observation. Expected %f,%f but saw %f,%f.",z_hat(LANDMARK_X),z_hat(LANDMARK_Y),pt.x,pt.y);
-                float bearing_error=(std::atan2(pt.y,pt.x)-std::atan2(z_hat(LANDMARK_Y),z_hat(LANDMARK_X)))*180.0/M_PI;
-                float dist_error=std::sqrt(pow(pt.x-z_hat(LANDMARK_X),2)+pow(pt.y-z_hat(LANDMARK_Y),2));
-                ROS_WARN_COND(!reset_state,"Repeated unexpected observation. Err %f deg, %f m.",bearing_error,dist_error);
-
-                /// Allow the feature update to go through.
-            }else{
-                /// Don't update the feature, since we aren't sure what we saw anyways. This way we are robust to a few outlier updates.
-                return;
-            }
-        }else{
-            /// We saw the feature
-            consecutive_err_count = 0;
-        }
-    }
+    Eigen::Vector2f z_hat = C.transpose()*(state.segment(feature_index,2)-state.head(2)); /// This checks out: z_hat = C'*(p_l_hat - p_r_hat) Stergios notes 8.4 p.119
 
     /// Update the covariance
     /// Calculate H matrix
@@ -457,11 +406,9 @@ void update_feature(geometry_msgs::Point32 pt, float phi, int feature_index)
     H.block(LANDMARK_X,ROBOT_X,LANDMARK_Y+1,ROBOT_Y+1) = -C.transpose();
     H.block(LANDMARK_X,ROBOT_P,LANDMARK_Y+1,1) = -C.transpose()*J*(state.segment(feature_index,2)-state.head(2));
     H.block(0,feature_index,2,2) = C.transpose();
-    H(LANDMARK_P,ROBOT_P)=-1.0;
-    H(LANDMARK_P,feature_index+LANDMARK_P)=1.0;
 
     /// Residual
-    Eigen::Vector3f res;
+    Eigen::Vector2f res;
     res = z_m - z_hat;
 
     /// Residual Covariance;
@@ -534,27 +481,38 @@ void featureCallback(const geometry_msgs::TransformStamped::ConstPtr& feature){
     pose_in.pose.orientation.y = feature->transform.rotation.y;
     pose_in.pose.orientation.z = feature->transform.rotation.z;
     pose_in.pose.orientation.w = feature->transform.rotation.w;
-    listener->transformPose("base_footprint",pose_in,pose_out);
+    listener->transformPose("base_link",pose_in,pose_out);
 
     /// Get the point from each feature detected
     geometry_msgs::Point32 pt;
 
     pt.x = pose_out.pose.position.x;
     pt.y = pose_out.pose.position.y;
-    /// Get the orientation of the feature
-    float phi = get_yaw(pose_out.pose);
 
     std::string id = feature->child_frame_id;
 
-    /// Check feature in map
-    int feature_index = get_feature_index(id);  /// Returns a feature_index of the feature in the state vector (-1 means nothing to update)
+    int feature_index = UNSURE;
+    if(id.length()>0)
+    {
+        /// Check feature in map
+        feature_index = get_feature_index(id);  /// Returns a feature_index of the feature in the state vector (-1 means nothing to update)
+    }else{
+        Eigen::Matrix2f C = Get_C(state[ROBOT_P]);
+        Eigen::MatrixXf Rp = Get_R_mapped(pt);
 
+        /// Check Mahalanobis distance
+        feature_index = Mahalanobis_dist(Rp,pt,C);  /// Returns a feature_index of the feature in the state vector (-1 means nothing to update)
+    }
     //std::cout << std::endl << "I saw " << id << " at " << pt.x << ",\t" << pt.y << ",\t" << phi << std::endl << std::endl;
 
-    if (feature_index != -1){ /// This is a point I have already seen, let's do an update!
-        update_feature(pt,phi,feature_index);
+    if (feature_index != UNSURE && feature_index != NEW_FEATURE){
+        /// This is a point I have already seen, let's do an update!
+        update_feature(pt,feature_index);
+    }else if(feature_index == NEW_FEATURE){
+        /// We are confident enough that this is a new point that we will add it to our state vector.
+        add_feature(pt,id);
     }else{
-        add_feature(pt,phi,id);
+        //ROS_WARN("Failed to add due to Mahalnobis check");
     }
 
     if(publish_pointclouds){
@@ -704,9 +662,12 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& odom){
         robot_xy.header.frame_id = world_frame;
         robot_xy.header.stamp = ros::Time::now();
         geometry_msgs::Point32 p1;
-        p1.x=state(0);
-        p1.y=state(1);
+        p1.x=state[ROBOT_X];
+        p1.y=state[ROBOT_Y];
         robot_xy.points.push_back(p1);
+        robot_xy.channels.resize(1);
+        robot_xy.channels[0].name="yaw";
+        robot_xy.channels[0].values.push_back(state[ROBOT_P]);
         pub_robot_state.publish(robot_xy);
     }
 
