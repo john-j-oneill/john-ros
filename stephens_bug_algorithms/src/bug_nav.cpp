@@ -178,7 +178,7 @@ void targetScanCallback(const nav_msgs::Odometry::ConstPtr& targetScan){
 
     /// Only update if we got a new target
     if(got_robot_pose && (std::fabs(path.end.x - float(targetScan->pose.pose.position.x))>eps ||
-                          std::fabs(path.end.x - float(targetScan->pose.pose.position.x))>eps))
+                          std::fabs(path.end.y - float(targetScan->pose.pose.position.y))>eps))
     {
         path.end.x = targetScan->pose.pose.position.x;
         path.end.y = targetScan->pose.pose.position.y;
